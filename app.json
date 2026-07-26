@@ -1,15 +1,27 @@
 {
   "expo": {
-    "name": "family-app-scaffold-tmp",
-    "slug": "family-app-scaffold-tmp",
+    "name": "Family App",
+    "slug": "family-app",
+    "owner": "guillaumemourozeaus-team",
+    "scheme": "familyapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-router",
+      "expo-notifications"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.guillaumemourozeau.familyapp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.guillaumemourozeau.familyapp",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -20,6 +32,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7d751d6f-aad3-4799-b445-5f640ffce3f2"
+      }
     }
   }
 }
