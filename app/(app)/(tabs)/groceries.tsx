@@ -1,0 +1,464 @@
+import { useMemo, useState } from "react";
+import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useGroceries, type GroceryItem, type GroceryPlace } from "@/hooks/useGroceries";
+import { useProfile } from "@/hooks/useProfile";
+import { isNewItem } from "@/lib/newBadge";
+import { TabScreenHeader } from "@/components/TabScreenHeader";
+import { BottomSheetModal } from "@/components/BottomSheetModal";
+import { ModalTitle } from "@/components/ModalTitle";
+import { FieldLabel } from "@/components/FieldLabel";
+import { Chip } from "@/components/Chip";
+import { Button } from "@/components/Button";
+import { TextField } from "@/components/TextField";
+import { colors, radii, sectionColors, sectionTints, spacing } from "@/lib/theme";
+
+export default function GroceriesScreen() {
+  const {
+    items,
+    places,
+    defaultPlace,
+    isLoading,
+    addPlace,
+    renamePlace,
+    deletePlace,
+    addItem,
+    toggleItem,
+    deleteItem,
+    removeFromList,
+    clearChecked,
+    getHistoryForPlace,
+  } = useGroceries();
+
+  const [isAdding, setIsAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [placeId, setPlaceId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [addingPlace, setAddingPlace] = useState<GroceryPlace | null>(null);
+  const [placeItemName, setPlaceItemName] = useState("");
+
+  const [isAddingPlace, setIsAddingPlace] = useState(false);
+  const [newPlaceName, setNewPlaceName] = useState("");
+
+  const [editingPlace, setEditingPlace] = useState<GroceryPlace | null>(null);
+  const [editPlaceName, setEditPlaceName] = useState("");
+
+  const sortedPlaces = useMemo(
+    () => [...places].sort((a, b) => (a.is_default ? -1 : b.is_default ? 1 : 0)),
+    [places]
+  );
+
+  const grouped = useMemo(() => {
+    const byPlace = new Map<string, GroceryItem[]>();
+    for (const item of items) {
+      const key = item.category_id ?? defaultPlace?.id ?? "";
+      const list = byPlace.get(key) ?? [];
+      list.push(item);
+      byPlace.set(key, list);
+    }
+    return byPlace;
+  }, [items, defaultPlace]);
+
+  const hasChecked = items.some((i) => i.is_checked);
+
+  function openGlobalAdd() {
+    setPlaceId(defaultPlace?.id ?? null);
+    setIsAdding(true);
+  }
+
+  async function handleAddItem(itemName?: string) {
+    const finalName = (itemName ?? name).trim();
+    if (!finalName || isSubmitting) return;
+    setIsSubmitting(true);
+    const result = await addItem(finalName, placeId);
+    setIsSubmitting(false);
+    if (result?.error) {
+      Alert.alert("Couldn't add item", result.error);
+      return;
+    }
+    setName("");
+    setPlaceId(defaultPlace?.id ?? null);
+    setIsAdding(false);
+  }
+
+  async function handleAddToPlace(itemName?: string) {
+    if (!addingPlace || isSubmitting) return;
+    const finalName = (itemName ?? placeItemName).trim();
+    if (!finalName) return;
+    setIsSubmitting(true);
+    const result = await addItem(finalName, addingPlace.id);
+    setIsSubmitting(false);
+    if (result?.error) {
+      Alert.alert("Couldn't add item", result.error);
+      return;
+    }
+    setPlaceItemName("");
+    setAddingPlace(null);
+  }
+
+  async function handleCreatePlace() {
+    if (!newPlaceName.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    await addPlace(newPlaceName.trim());
+    setIsSubmitting(false);
+    setNewPlaceName("");
+    setIsAddingPlace(false);
+  }
+
+  function openEditPlace(place: GroceryPlace) {
+    setAddingPlace(null);
+    setEditPlaceName(place.name);
+    setEditingPlace(place);
+  }
+
+  async function handleSavePlaceName() {
+    if (!editingPlace || !editPlaceName.trim()) return;
+    const result = await renamePlace(editingPlace.id, editPlaceName.trim());
+    if (result?.error) {
+      Alert.alert("Couldn't rename place", result.error);
+      return;
+    }
+    setEditingPlace(null);
+  }
+
+  function handleRemoveHistoryEntry(entry: { id: string; name: string }) {
+    const isStillActive = items.some((i) => i.id === entry.id);
+    if (!isStillActive) {
+      deleteItem(entry.id);
+      return;
+    }
+    Alert.alert(`Remove "${entry.name}"?`, "It's still on your list — this will remove it entirely.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Remove", style: "destructive", onPress: () => deleteItem(entry.id) },
+    ]);
+  }
+
+  function handleDeletePlace() {
+    if (!editingPlace) return;
+    Alert.alert("Delete this place?", "Items here will move to Anywhere.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          const result = await deletePlace(editingPlace.id);
+          if (result?.error) {
+            Alert.alert("Couldn't delete place", result.error);
+            return;
+          }
+          setEditingPlace(null);
+        },
+      },
+    ]);
+  }
+
+  if (isLoading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <TabScreenHeader
+        title="Groceries"
+        icon="cart"
+        tint={sectionColors.groceries}
+        tintBackground={sectionTints.groceries}
+        actionLabel="+ Add Item"
+        onAction={openGlobalAdd}
+      />
+
+      <FlatList
+        data={sortedPlaces}
+        keyExtractor={(c) => c.id}
+        contentContainerStyle={styles.listContent}
+        ListFooterComponent={
+          <View>
+            <TouchableOpacity style={styles.addPlaceRow} onPress={() => setIsAddingPlace(true)}>
+              <Text style={styles.addPlaceText}>+ Add new place</Text>
+            </TouchableOpacity>
+            {hasChecked && (
+              <TouchableOpacity style={styles.clearRow} onPress={clearChecked}>
+                <Text style={styles.clearLink}>Clear checked items</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        }
+        renderItem={({ item: place }) => {
+          const rows = grouped.get(place.id) ?? [];
+          return (
+            <View style={styles.section}>
+              <View style={styles.placeHeader}>
+                <TouchableOpacity style={styles.placeHeaderMain} onPress={() => setAddingPlace(place)}>
+                  <Text style={styles.placeName}>{place.name}</Text>
+                  <Text style={styles.placeAddHint}>+ Add</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => openEditPlace(place)} hitSlop={8} style={styles.editIcon}>
+                  <Ionicons name="create-outline" size={20} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+              {rows.length === 0 ? (
+                <Text style={styles.emptyPlaceText}>Nothing here yet</Text>
+              ) : (
+                rows.map((item) => (
+                  <ItemRow
+                    key={item.id}
+                    item={item}
+                    onToggle={() => toggleItem(item)}
+                    onDelete={() => removeFromList(item.id)}
+                  />
+                ))
+              )}
+            </View>
+          );
+        }}
+        ListEmptyComponent={
+          items.length === 0 ? (
+            <Text style={styles.emptyText}>List's empty. Tap a place below to add something.</Text>
+          ) : null
+        }
+      />
+
+      <BottomSheetModal
+        visible={!!addingPlace}
+        onClose={() => setAddingPlace(null)}
+        contentStyle={styles.modalContentScrollable}
+      >
+        <View style={styles.modalHeaderRow}>
+          <ModalTitle
+            icon="storefront-outline"
+            tint={sectionColors.groceries}
+            tintBackground={sectionTints.groceries}
+            title={`Add to ${addingPlace?.name ?? ""}`}
+          />
+          {addingPlace && (
+            <TouchableOpacity onPress={() => openEditPlace(addingPlace)} hitSlop={8}>
+              <Ionicons name="create-outline" size={22} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+        <TextField
+          placeholder="Item name"
+          value={placeItemName}
+          onChangeText={setPlaceItemName}
+          autoFocus
+          onSubmitEditing={() => handleAddToPlace()}
+        />
+        <Button
+          label="Add item"
+          onPress={() => handleAddToPlace()}
+          loading={isSubmitting}
+          style={[styles.submitButton, styles.sectionButton]}
+        />
+
+        {addingPlace && getHistoryForPlace(addingPlace.id).length > 0 && (
+          <>
+            <FieldLabel icon="time-outline" label="Previously added here" />
+            <View style={styles.chipRow}>
+              {getHistoryForPlace(addingPlace.id).map((entry) => (
+                <Chip
+                  key={entry.id}
+                  label={entry.name}
+                  selected={false}
+                  onPress={() => handleAddToPlace(entry.name)}
+                  color={sectionColors.groceries}
+                />
+              ))}
+            </View>
+          </>
+        )}
+      </BottomSheetModal>
+
+      <BottomSheetModal visible={isAdding} onClose={() => setIsAdding(false)}>
+        <ModalTitle icon="cart" tint={sectionColors.groceries} tintBackground={sectionTints.groceries} title="New item" />
+        <TextField
+          placeholder="Item name"
+          value={name}
+          onChangeText={setName}
+          autoFocus
+          onSubmitEditing={() => handleAddItem()}
+        />
+
+        <FieldLabel icon="storefront-outline" label="Where" />
+        <View style={styles.chipRow}>
+          {places.map((p) => (
+            <Chip
+              key={p.id}
+              label={p.name}
+              selected={placeId === p.id}
+              onPress={() => setPlaceId(p.id)}
+              color={sectionColors.groceries}
+            />
+          ))}
+        </View>
+
+        <Button
+          label="Add item"
+          onPress={() => handleAddItem()}
+          loading={isSubmitting}
+          style={[styles.submitButton, styles.sectionButton]}
+        />
+      </BottomSheetModal>
+
+      <BottomSheetModal visible={isAddingPlace} onClose={() => setIsAddingPlace(false)}>
+        <ModalTitle
+          icon="add-circle-outline"
+          tint={sectionColors.groceries}
+          tintBackground={sectionTints.groceries}
+          title="New place"
+        />
+        <TextField
+          placeholder="Store name"
+          value={newPlaceName}
+          onChangeText={setNewPlaceName}
+          autoFocus
+          onSubmitEditing={handleCreatePlace}
+        />
+        <Button
+          label="Add place"
+          onPress={handleCreatePlace}
+          loading={isSubmitting}
+          style={[styles.submitButton, styles.sectionButton]}
+        />
+      </BottomSheetModal>
+
+      <BottomSheetModal
+        visible={!!editingPlace}
+        onClose={() => setEditingPlace(null)}
+        contentStyle={styles.modalContentScrollable}
+      >
+        <ModalTitle
+          icon="create-outline"
+          tint={sectionColors.groceries}
+          tintBackground={sectionTints.groceries}
+          title="Edit place"
+        />
+        <TextField placeholder="Place name" value={editPlaceName} onChangeText={setEditPlaceName} />
+        <Button
+          label="Save name"
+          onPress={handleSavePlaceName}
+          style={[styles.submitButton, styles.sectionButton]}
+        />
+
+        {editingPlace && !editingPlace.is_default && (
+          <Button label="Delete place" variant="danger" onPress={handleDeletePlace} style={styles.submitButton} />
+        )}
+
+        {editingPlace && getHistoryForPlace(editingPlace.id).length > 0 && (
+          <>
+            <FieldLabel icon="time-outline" label="Previously added here" />
+            {getHistoryForPlace(editingPlace.id).map((entry) => (
+              <View key={entry.id} style={styles.historyRow}>
+                <Text style={styles.historyText}>{entry.name}</Text>
+                <TouchableOpacity onPress={() => handleRemoveHistoryEntry(entry)} hitSlop={8}>
+                  <Text style={styles.deleteLink}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </>
+        )}
+      </BottomSheetModal>
+    </View>
+  );
+}
+
+function ItemRow({ item, onToggle, onDelete }: { item: GroceryItem; onToggle: () => void; onDelete: () => void }) {
+  const { profile } = useProfile();
+  return (
+    <View style={styles.row}>
+      <TouchableOpacity
+        style={[styles.checkbox, item.is_checked && styles.checkboxChecked]}
+        onPress={onToggle}
+        hitSlop={8}
+      >
+        {item.is_checked && <Text style={styles.checkmark}>✓</Text>}
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.rowMain} onPress={() => router.push(`/grocery/${item.id}`)}>
+        <View style={styles.rowTitleLine}>
+          <Text style={[styles.rowTitle, item.is_checked && styles.rowTitleDone]}>{item.name}</Text>
+          {isNewItem(item.created_at, item.created_by, profile) && <Text style={styles.newBadge}>New</Text>}
+        </View>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={onDelete} hitSlop={8}>
+        <Text style={styles.deleteLink}>✕</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  listContent: { paddingBottom: 40 },
+  clearRow: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.sm },
+  clearLink: { color: colors.danger, fontSize: 13, fontWeight: "600" },
+  section: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  placeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+  },
+  placeHeaderMain: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  placeName: { fontSize: 19, fontWeight: "800", color: sectionColors.groceries },
+  placeAddHint: { fontSize: 13, fontWeight: "700", color: sectionColors.groceries },
+  editIcon: { paddingLeft: spacing.md },
+  emptyPlaceText: { fontSize: 13, color: colors.textFaint, paddingBottom: spacing.sm },
+  addPlaceRow: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  addPlaceText: { fontSize: 19, fontWeight: "800", color: sectionColors.groceries },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm + 2,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+    gap: spacing.md,
+  },
+  rowMain: { flex: 1 },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: { backgroundColor: colors.success, borderColor: colors.success },
+  checkmark: { color: colors.white, fontSize: 14, fontWeight: "700" },
+  rowTitleLine: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  rowTitle: { fontSize: 16, color: colors.text },
+  rowTitleDone: { textDecorationLine: "line-through", color: colors.textFaint },
+  newBadge: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: colors.white,
+    backgroundColor: colors.danger,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 2,
+    borderRadius: radii.sm,
+  },
+  deleteLink: { color: colors.textFaint, fontSize: 16, paddingHorizontal: spacing.sm },
+  emptyText: { textAlign: "center", color: colors.textMuted, marginTop: 40 },
+  modalContentScrollable: { maxHeight: "80%" },
+  modalHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  modalTitle: { fontSize: 18, fontWeight: "700", color: colors.text, marginBottom: spacing.xs },
+  label: { fontSize: 13, fontWeight: "600", color: colors.textMuted, marginTop: spacing.sm },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  historyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.xs + 2,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  historyText: { fontSize: 14, color: colors.text },
+  submitButton: { marginTop: spacing.sm },
+  sectionButton: { backgroundColor: sectionColors.groceries },
+});
