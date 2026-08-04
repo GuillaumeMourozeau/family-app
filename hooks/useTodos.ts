@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useState } from "react";
 import { useFocusEffect } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
+import type { TodoReminder, TodoReminderFreq } from "@/lib/reminders";
 
 export type TodoPriority = "urgent" | "soon" | "whenever";
 
@@ -15,7 +16,20 @@ export type Todo = {
   created_at: string;
   is_private: boolean;
   created_by: string;
+  reminder_enabled: boolean;
+  reminder_freq: TodoReminderFreq | null;
+  reminder_time: string | null;
+  reminder_weekday: number | null;
 };
+
+function reminderToColumns(reminder: TodoReminder | null) {
+  return {
+    reminder_enabled: !!reminder,
+    reminder_freq: reminder?.freq ?? null,
+    reminder_time: reminder?.time ?? null,
+    reminder_weekday: reminder?.freq === "weekly" ? (reminder.weekday ?? 0) : null,
+  };
+}
 
 export function useTodos() {
   const { profile } = useProfile();
@@ -62,7 +76,8 @@ export function useTodos() {
     title: string,
     assignedTo: string | null,
     priority: TodoPriority,
-    isPrivate: boolean = false
+    isPrivate: boolean = false,
+    reminder: TodoReminder | null = null
   ) {
     if (!familyId || !profile) return;
     await supabase.from("todos").insert({
@@ -72,6 +87,7 @@ export function useTodos() {
       priority,
       created_by: profile.id,
       is_private: isPrivate,
+      ...reminderToColumns(reminder),
     });
   }
 
@@ -102,6 +118,7 @@ export function useTodos() {
       priority: TodoPriority;
       description: string | null;
       isPrivate: boolean;
+      reminder: TodoReminder | null;
     }
   ) {
     await supabase
@@ -112,6 +129,7 @@ export function useTodos() {
         priority: input.priority,
         description: input.description,
         is_private: input.isPrivate,
+        ...reminderToColumns(input.reminder),
       })
       .eq("id", id);
   }

@@ -19,6 +19,7 @@ import { Chip } from "@/components/Chip";
 import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
 import { RecurrencePicker } from "@/components/RecurrencePicker";
+import { EventReminderPicker } from "@/components/EventReminderPicker";
 import { ForWhoPicker } from "@/components/calendar/ForWhoPicker";
 import { EventRow } from "@/components/calendar/EventRow";
 import { DayAgenda } from "@/components/calendar/DayAgenda";
@@ -50,6 +51,7 @@ export default function CalendarScreen() {
   const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [isPrivate, setIsPrivate] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurrenceInput>(null);
+  const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
@@ -183,6 +185,7 @@ export default function CalendarScreen() {
     setParticipantIds([]);
     setIsPrivate(false);
     setRecurrence(null);
+    setReminderOffsets([]);
   }
 
   async function handleAddEvent() {
@@ -195,6 +198,7 @@ export default function CalendarScreen() {
       participantIds,
       isPrivate,
       recurrence,
+      reminderOffsetsMinutes: reminderOffsets,
     });
     resetForm();
     setIsAdding(false);
@@ -383,6 +387,8 @@ export default function CalendarScreen() {
             setParticipantIds(next.participantIds);
           }}
         />
+
+        <EventReminderPicker value={reminderOffsets} onChange={setReminderOffsets} tint={sectionColors.calendar} />
 
         <View style={styles.switchRow}>
           <FieldLabel icon="lock-closed-outline" label="Keep it private" />

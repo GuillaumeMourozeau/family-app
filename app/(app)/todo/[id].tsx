@@ -6,10 +6,12 @@ import { useTodos, type TodoPriority } from "@/hooks/useTodos";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
 import { useProfile } from "@/hooks/useProfile";
 import { getMemberColor, NEUTRAL_COLOR } from "@/lib/memberColors";
+import type { TodoReminder } from "@/lib/reminders";
 import { Chip } from "@/components/Chip";
 import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
 import { FieldLabel } from "@/components/FieldLabel";
+import { TodoReminderPicker } from "@/components/TodoReminderPicker";
 import { colors, radii, sectionColors, spacing } from "@/lib/theme";
 
 const PRIORITY_LABELS: Record<TodoPriority, string> = {
@@ -45,6 +47,7 @@ export default function TodoDetailScreen() {
   const [priority, setPriority] = useState<TodoPriority>("whenever");
   const [details, setDetails] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
+  const [reminder, setReminder] = useState<TodoReminder | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -54,6 +57,11 @@ export default function TodoDetailScreen() {
     setPriority(todo.priority);
     setDetails(todo.description ?? "");
     setIsPrivate(todo.is_private);
+    setReminder(
+      todo.reminder_enabled && todo.reminder_freq && todo.reminder_time
+        ? { freq: todo.reminder_freq, time: todo.reminder_time, weekday: todo.reminder_weekday }
+        : null
+    );
   }, [todo?.id]);
 
   async function handleSave() {
@@ -65,6 +73,7 @@ export default function TodoDetailScreen() {
       priority,
       description: details.trim() || null,
       isPrivate,
+      reminder,
     });
     setIsSaving(false);
     router.back();
@@ -171,6 +180,8 @@ export default function TodoDetailScreen() {
             />
           </View>
         )}
+
+        <TodoReminderPicker value={reminder} onChange={setReminder} tint={sectionColors.todo} />
 
         <FieldLabel icon="document-text-outline" label="More details" />
         <TextField

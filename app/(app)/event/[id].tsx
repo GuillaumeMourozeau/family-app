@@ -10,6 +10,7 @@ import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
 import { FieldLabel } from "@/components/FieldLabel";
 import { RecurrencePicker } from "@/components/RecurrencePicker";
+import { EventReminderPicker } from "@/components/EventReminderPicker";
 import { ForWhoPicker } from "@/components/calendar/ForWhoPicker";
 import { colors, radii, sectionColors, spacing } from "@/lib/theme";
 
@@ -32,6 +33,7 @@ export default function EventDetailScreen() {
   const [details, setDetails] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurrenceInput>(null);
+  const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -46,6 +48,7 @@ export default function EventDetailScreen() {
     setLocation(event.location ?? "");
     setDetails(event.description ?? "");
     setIsPrivate(event.is_private);
+    setReminderOffsets(event.reminder_offsets_minutes ?? []);
     setRecurrence(
       event.recurrence_freq
         ? {
@@ -73,6 +76,7 @@ export default function EventDetailScreen() {
       location: location.trim() || null,
       isPrivate,
       recurrence,
+      reminderOffsetsMinutes: reminderOffsets,
     });
     setIsSaving(false);
     router.back();
@@ -191,6 +195,8 @@ export default function EventDetailScreen() {
             setParticipantIds(next.participantIds);
           }}
         />
+
+        <EventReminderPicker value={reminderOffsets} onChange={setReminderOffsets} tint={sectionColors.calendar} />
 
         {isCreator && (
           <View style={styles.switchRow}>

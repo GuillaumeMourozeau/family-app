@@ -21,6 +21,7 @@ export type CalendarEvent = {
   recurrence_end_type: RecurrenceEndType | null;
   recurrence_end_date: string | null;
   recurrence_count: number | null;
+  reminder_offsets_minutes: number[] | null;
 };
 
 export type RecurrenceInput = RecurrenceRule | null;
@@ -106,6 +107,7 @@ export function useEvents() {
     participantIds: string[];
     isPrivate: boolean;
     recurrence: RecurrenceInput;
+    reminderOffsetsMinutes: number[];
   }) {
     if (!familyId || !profile) return;
 
@@ -120,6 +122,7 @@ export function useEvents() {
         applies_to_whole_family: input.appliesToWholeFamily,
         created_by: profile.id,
         is_private: input.isPrivate,
+        reminder_offsets_minutes: input.reminderOffsetsMinutes.length > 0 ? input.reminderOffsetsMinutes : null,
         ...recurrenceToColumns(input.recurrence),
       })
       .select()
@@ -146,6 +149,7 @@ export function useEvents() {
       location: string | null;
       isPrivate: boolean;
       recurrence: RecurrenceInput;
+      reminderOffsetsMinutes: number[];
     }
   ) {
     const { error } = await supabase
@@ -158,6 +162,7 @@ export function useEvents() {
         description: input.description,
         location: input.location,
         is_private: input.isPrivate,
+        reminder_offsets_minutes: input.reminderOffsetsMinutes.length > 0 ? input.reminderOffsetsMinutes : null,
         ...recurrenceToColumns(input.recurrence),
       })
       .eq("id", id);

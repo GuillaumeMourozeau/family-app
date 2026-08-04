@@ -7,6 +7,7 @@ import { useFamilyMembers, type FamilyMember } from "@/hooks/useFamilyMembers";
 import { useProfile } from "@/hooks/useProfile";
 import { getMemberColor, getTodoAssigneeColor, NEUTRAL_COLOR } from "@/lib/memberColors";
 import { isNewItem } from "@/lib/newBadge";
+import type { TodoReminder } from "@/lib/reminders";
 import { TabScreenHeader } from "@/components/TabScreenHeader";
 import { BottomSheetModal } from "@/components/BottomSheetModal";
 import { ModalTitle } from "@/components/ModalTitle";
@@ -14,6 +15,7 @@ import { FieldLabel } from "@/components/FieldLabel";
 import { Chip } from "@/components/Chip";
 import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
+import { TodoReminderPicker } from "@/components/TodoReminderPicker";
 import { colors, radii, sectionColors, sectionTints, spacing } from "@/lib/theme";
 
 const PRIORITY_LABELS: Record<TodoPriority, string> = {
@@ -46,6 +48,7 @@ export default function TodosScreen() {
   const [assignedTo, setAssignedTo] = useState<string | null>(null);
   const [priority, setPriority] = useState<TodoPriority>("whenever");
   const [isPrivate, setIsPrivate] = useState(false);
+  const [reminder, setReminder] = useState<TodoReminder | null>(null);
   const [memberFilter, setMemberFilter] = useState<string | null>(null);
 
   const filteredTodos = useMemo(() => {
@@ -66,11 +69,12 @@ export default function TodosScreen() {
 
   async function handleAddTodo() {
     if (!title.trim()) return;
-    await addTodo(title.trim(), assignedTo, priority, isPrivate);
+    await addTodo(title.trim(), assignedTo, priority, isPrivate, reminder);
     setTitle("");
     setAssignedTo(null);
     setPriority("whenever");
     setIsPrivate(false);
+    setReminder(null);
     setIsAdding(false);
   }
 
@@ -177,6 +181,8 @@ export default function TodosScreen() {
             />
           ))}
         </View>
+
+        <TodoReminderPicker value={reminder} onChange={setReminder} tint={sectionColors.todo} />
 
         <View style={styles.switchRow}>
           <FieldLabel icon="lock-closed-outline" label="Keep it private" />
