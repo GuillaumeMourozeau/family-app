@@ -3,6 +3,7 @@ import { ActivityIndicator, Text, View } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { ProfileProvider, useProfile } from "@/hooks/useProfile";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useReminderScheduler } from "@/hooks/useReminderScheduler";
 
 function LoadingScreen() {
   return (
@@ -24,6 +25,7 @@ function FamilyGate({ children }: { children: React.ReactNode }) {
   const { profile, isLoading } = useProfile();
   const pathname = usePathname();
   usePushNotifications();
+  useReminderScheduler();
 
   if (isLoading) {
     return <LoadingScreen />;
