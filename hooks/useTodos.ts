@@ -84,17 +84,22 @@ export function useTodos() {
     dueDate: string | null = null
   ) {
     if (!familyId || !profile) return;
-    await supabase.from("todos").insert({
-      family_id: familyId,
-      title,
-      assigned_to: assignedTo,
-      priority,
-      category_id: categoryId,
-      due_date: dueDate,
-      created_by: profile.id,
-      is_private: isPrivate,
-      ...reminderToColumns(reminder),
-    });
+    const { data, error } = await supabase
+      .from("todos")
+      .insert({
+        family_id: familyId,
+        title,
+        assigned_to: assignedTo,
+        priority,
+        category_id: categoryId,
+        due_date: dueDate,
+        created_by: profile.id,
+        is_private: isPrivate,
+        ...reminderToColumns(reminder),
+      })
+      .select()
+      .single();
+    if (!error && data) setTodos((prev) => [...prev, data]);
   }
 
   async function toggleTodo(todo: Todo) {
