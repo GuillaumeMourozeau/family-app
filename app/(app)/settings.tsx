@@ -3,11 +3,13 @@ import { Alert, ScrollView, Share, StyleSheet, Switch, Text, TouchableOpacity, V
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
 import { useFamily } from "@/hooks/useFamily";
 import { useMyFamilies } from "@/hooks/useMyFamilies";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
+import { setAppLanguage, type AppLanguage } from "@/lib/i18n";
 import { BottomSheetModal } from "@/components/BottomSheetModal";
 import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
@@ -15,22 +17,22 @@ import { cardShadow, colors, gradients, radii, spacing } from "@/lib/theme";
 
 type NotificationKey = "messages" | "calendar" | "todos" | "urgentTodos" | "groceries";
 
-const NOTIFICATION_ITEMS: { key: NotificationKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { key: "messages", label: "New messages", icon: "chatbubble-ellipses" },
-  { key: "calendar", label: "New calendar events", icon: "calendar" },
-  { key: "todos", label: "New to-do items", icon: "checkmark-circle" },
-  { key: "urgentTodos", label: "New urgent to-do items", icon: "alert-circle" },
-  { key: "groceries", label: "New grocery items", icon: "cart" },
+const NOTIFICATION_ITEMS: { key: NotificationKey; labelKey: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: "messages", labelKey: "settings.notif.messages", icon: "chatbubble-ellipses" },
+  { key: "calendar", labelKey: "settings.notif.calendar", icon: "calendar" },
+  { key: "todos", labelKey: "settings.notif.todos", icon: "checkmark-circle" },
+  { key: "urgentTodos", labelKey: "settings.notif.urgentTodos", icon: "alert-circle" },
+  { key: "groceries", labelKey: "settings.notif.groceries", icon: "cart" },
 ];
 
 const DEFAULT_HOME_SECTIONS = ["messages", "whatsnew", "today", "urgent_todos", "todays_meals"];
 
-const HOME_SECTION_ITEMS: { key: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { key: "messages", label: "Important Messages", icon: "chatbubble-ellipses" },
-  { key: "whatsnew", label: "What's New", icon: "sparkles" },
-  { key: "today", label: "Today", icon: "calendar" },
-  { key: "urgent_todos", label: "Urgent To-Do", icon: "alert-circle" },
-  { key: "todays_meals", label: "Today's Meals", icon: "restaurant" },
+const HOME_SECTION_ITEMS: { key: string; labelKey: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: "messages", labelKey: "home.sections.messages", icon: "chatbubble-ellipses" },
+  { key: "whatsnew", labelKey: "home.sections.whatsNew", icon: "sparkles" },
+  { key: "today", labelKey: "home.sections.today", icon: "calendar" },
+  { key: "urgent_todos", labelKey: "home.sections.urgentTodo", icon: "alert-circle" },
+  { key: "todays_meals", labelKey: "home.sections.todaysMeals", icon: "restaurant" },
 ];
 
 const DEFAULT_NOTIFICATION_PREFS: Record<NotificationKey, boolean> = {
@@ -42,6 +44,7 @@ const DEFAULT_NOTIFICATION_PREFS: Record<NotificationKey, boolean> = {
 };
 
 export default function SettingsScreen() {
+  const { t, i18n } = useTranslation();
   const { profile, refetch, updateHomeSections, updateNotificationPrefs } = useProfile();
   const { family, updateFamily } = useFamily();
   const { families, switchFamily } = useMyFamilies();
@@ -85,7 +88,7 @@ export default function SettingsScreen() {
     const { error } = await supabase.from("profiles").update({ full_name: nameDraft.trim() }).eq("id", profile.id);
     setIsSaving(false);
     if (error) {
-      Alert.alert("Couldn't update name", error.message);
+      Alert.alert(t("settings.couldntUpdateName"), error.message);
       return;
     }
     await refetch();
@@ -95,7 +98,7 @@ export default function SettingsScreen() {
   async function handleShareInvite() {
     if (!family) return;
     await Share.share({
-      message: `Join our family on Family App! Use invite code ${family.invite_code} to join "${family.name}".`,
+      message: t("settings.shareInviteMessage", { code: family.invite_code, name: family.name }),
     });
   }
 
@@ -103,7 +106,7 @@ export default function SettingsScreen() {
     if (familyId === family?.id) return;
     const result = await switchFamily(familyId);
     if (result.error) {
-      Alert.alert("Couldn't switch family", result.error);
+      Alert.alert(t("settings.couldntSwitchFamily"), result.error);
     }
   }
 
@@ -124,7 +127,7 @@ export default function SettingsScreen() {
     const result = await addManagedMember(managedNameDraft.trim());
     setIsAddingManagedSaving(false);
     if (result.error) {
-      Alert.alert("Couldn't add member", result.error);
+      Alert.alert(t("settings.couldntAddMember"), result.error);
       return;
     }
     setManagedNameDraft("");
@@ -140,7 +143,7 @@ export default function SettingsScreen() {
     if (!renamingMemberId || !renameDraft.trim()) return;
     const result = await renameMember(renamingMemberId, renameDraft.trim());
     if (result.error) {
-      Alert.alert("Couldn't rename member", result.error);
+      Alert.alert(t("settings.couldntRenameMember"), result.error);
       return;
     }
     setRenamingMemberId(null);
@@ -148,18 +151,18 @@ export default function SettingsScreen() {
 
   async function handlePromote(memberId: string) {
     const result = await promoteToAdmin(memberId);
-    if (result.error) Alert.alert("Couldn't promote member", result.error);
+    if (result.error) Alert.alert(t("settings.couldntPromoteMember"), result.error);
   }
 
   function handleRemoveMember(memberId: string, name: string | null) {
-    Alert.alert("Remove member?", `${name ?? "This member"} will lose access to this family.`, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("settings.removeMemberTitle"), t("settings.removeMemberMessage", { name: name ?? t("settings.thisMember") }), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Remove",
+        text: t("common.remove"),
         style: "destructive",
         onPress: async () => {
           const result = await removeMember(memberId);
-          if (result.error) Alert.alert("Couldn't remove member", result.error);
+          if (result.error) Alert.alert(t("settings.couldntRemoveMember"), result.error);
         },
       },
     ]);
@@ -171,7 +174,7 @@ export default function SettingsScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={styles.headerTitle}>{t("settings.title")}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -186,12 +189,27 @@ export default function SettingsScreen() {
             <Text style={styles.avatarText}>{(profile?.full_name ?? "?").charAt(0).toUpperCase()}</Text>
           </View>
           <TouchableOpacity onPress={openEditName} style={styles.flexShrink}>
-            <Text style={styles.profileName}>{profile?.full_name ?? "You"}</Text>
-            <Text style={styles.profileEdit}>Tap to edit your name ›</Text>
+            <Text style={styles.profileName}>{profile?.full_name ?? t("common.youCapitalized")}</Text>
+            <Text style={styles.profileEdit}>{t("settings.tapToEditName")}</Text>
           </TouchableOpacity>
         </LinearGradient>
 
-        <Text style={styles.sectionLabel}>Family</Text>
+        <Text style={styles.sectionLabel}>{t("settings.language")}</Text>
+        <View style={[styles.tintCard, styles.tintPurple, styles.languageRow]}>
+          {(["en", "fr"] as AppLanguage[]).map((lang) => (
+            <TouchableOpacity
+              key={lang}
+              style={[styles.languageOption, i18n.language === lang && styles.languageOptionSelected]}
+              onPress={() => setAppLanguage(lang)}
+            >
+              <Text style={[styles.languageOptionText, i18n.language === lang && styles.languageOptionTextSelected]}>
+                {lang === "en" ? "🇬🇧 English" : "🇫🇷 Français"}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.sectionLabel}>{t("settings.family")}</Text>
         <View style={[styles.tintCard, styles.tintPurple]}>
           {families.map((f) => (
             <TouchableOpacity key={f.id} style={styles.listRow} onPress={() => handleSwitchFamily(f.id)}>
@@ -211,7 +229,7 @@ export default function SettingsScreen() {
             <View style={styles.iconChip}>
               <Ionicons name="person-add" size={16} color={colors.purple} />
             </View>
-            <Text style={styles.rowLabel}>Invite a member</Text>
+            <Text style={styles.rowLabel}>{t("settings.inviteMember")}</Text>
             <Ionicons name="chevron-forward" size={16} color="rgba(31,41,55,0.35)" />
           </TouchableOpacity>
           <TouchableOpacity
@@ -221,20 +239,20 @@ export default function SettingsScreen() {
             <View style={styles.iconChip}>
               <Ionicons name="add-circle" size={16} color={colors.purple} />
             </View>
-            <Text style={styles.rowLabel}>Join a new family</Text>
+            <Text style={styles.rowLabel}>{t("settings.joinNewFamily")}</Text>
             <Ionicons name="chevron-forward" size={16} color="rgba(31,41,55,0.35)" />
           </TouchableOpacity>
         </View>
 
         <LinearGradient colors={gradients.gold} style={styles.inviteCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-          <Text style={styles.inviteLabel}>Invite code</Text>
+          <Text style={styles.inviteLabel}>{t("settings.inviteCode")}</Text>
           <Text style={styles.inviteCode}>{family?.invite_code ?? "……"}</Text>
           <TouchableOpacity style={styles.shareButton} onPress={handleShareInvite}>
-            <Text style={styles.shareButtonText}>Share invite code</Text>
+            <Text style={styles.shareButtonText}>{t("settings.shareInviteCode")}</Text>
           </TouchableOpacity>
         </LinearGradient>
 
-        <Text style={styles.sectionLabel}>Family Members</Text>
+        <Text style={styles.sectionLabel}>{t("settings.familyMembers")}</Text>
         <View style={[styles.tintCard, styles.tintPurple]}>
           {members.map((m, index) => {
             const isSelf = m.id === profile?.id;
@@ -250,19 +268,19 @@ export default function SettingsScreen() {
                 </View>
                 <View style={styles.flexShrink}>
                   <Text style={styles.rowLabel}>
-                    {m.full_name ?? "Member"}
-                    {isSelf ? " (you)" : ""}
+                    {m.full_name ?? t("common.member")}
+                    {isSelf ? t("settings.you") : ""}
                   </Text>
                   <Text style={styles.memberSubtext}>
-                    {m.role === "admin" ? "Admin" : "Member"}
-                    {m.is_managed ? " · No phone · tap to rename" : ""}
+                    {m.role === "admin" ? t("settings.admin") : t("common.member")}
+                    {m.is_managed ? t("settings.noPhoneTapToRename") : ""}
                   </Text>
                 </View>
                 {isAdmin && !isSelf && (
                   <View style={styles.memberActions}>
                     {m.role !== "admin" && (
                       <TouchableOpacity onPress={() => handlePromote(m.id)} hitSlop={8}>
-                        <Text style={styles.memberActionLink}>Make admin</Text>
+                        <Text style={styles.memberActionLink}>{t("settings.makeAdmin")}</Text>
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity onPress={() => handleRemoveMember(m.id, m.full_name)} hitSlop={8}>
@@ -277,12 +295,12 @@ export default function SettingsScreen() {
             <View style={styles.iconChip}>
               <Ionicons name="add-circle" size={16} color={colors.purple} />
             </View>
-            <Text style={styles.rowLabel}>Add a member without a phone</Text>
+            <Text style={styles.rowLabel}>{t("settings.addMemberNoPhone")}</Text>
             <Ionicons name="chevron-forward" size={16} color="rgba(31,41,55,0.35)" />
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionLabel}>Home Sections</Text>
+        <Text style={styles.sectionLabel}>{t("settings.homeSections")}</Text>
         <View style={[styles.tintCard, styles.tintGold]}>
           {HOME_SECTION_ITEMS.map((item, index) => (
             <View
@@ -292,7 +310,7 @@ export default function SettingsScreen() {
               <View style={styles.iconChip}>
                 <Ionicons name={item.icon} size={16} color={colors.gold} />
               </View>
-              <Text style={styles.rowLabel}>{item.label}</Text>
+              <Text style={styles.rowLabel}>{t(item.labelKey)}</Text>
               <Switch
                 value={visibleSections.includes(item.key)}
                 onValueChange={() => toggleHomeSection(item.key)}
@@ -302,7 +320,7 @@ export default function SettingsScreen() {
           ))}
         </View>
 
-        <Text style={styles.sectionLabel}>Notifications</Text>
+        <Text style={styles.sectionLabel}>{t("settings.notifications")}</Text>
         <View style={[styles.tintCard, styles.tintMint]}>
           {NOTIFICATION_ITEMS.map((item, index) => (
             <View
@@ -312,7 +330,7 @@ export default function SettingsScreen() {
               <View style={styles.iconChip}>
                 <Ionicons name={item.icon} size={16} color={colors.green} />
               </View>
-              <Text style={styles.rowLabel}>{item.label}</Text>
+              <Text style={styles.rowLabel}>{t(item.labelKey)}</Text>
               <Switch
                 value={notificationPrefs[item.key]}
                 onValueChange={() => toggleNotification(item.key)}
@@ -325,22 +343,22 @@ export default function SettingsScreen() {
       </ScrollView>
 
       <BottomSheetModal visible={isEditingName} onClose={() => setIsEditingName(false)}>
-        <Text style={styles.modalTitle}>Your name</Text>
-        <TextField value={nameDraft} onChangeText={setNameDraft} placeholder="Your name" autoFocus />
-        <Button label="Save" onPress={handleSaveName} loading={isSaving} style={styles.saveButton} />
+        <Text style={styles.modalTitle}>{t("settings.yourName")}</Text>
+        <TextField value={nameDraft} onChangeText={setNameDraft} placeholder={t("settings.yourName")} autoFocus />
+        <Button label={t("common.save")} onPress={handleSaveName} loading={isSaving} style={styles.saveButton} />
       </BottomSheetModal>
 
       <BottomSheetModal visible={isRenamingFamily} onClose={() => setIsRenamingFamily(false)}>
-        <Text style={styles.modalTitle}>Family name</Text>
-        <TextField value={familyNameDraft} onChangeText={setFamilyNameDraft} placeholder="Family name" autoFocus />
-        <Button label="Save" onPress={handleRenameFamily} style={styles.saveButton} />
+        <Text style={styles.modalTitle}>{t("settings.familyName")}</Text>
+        <TextField value={familyNameDraft} onChangeText={setFamilyNameDraft} placeholder={t("settings.familyName")} autoFocus />
+        <Button label={t("common.save")} onPress={handleRenameFamily} style={styles.saveButton} />
       </BottomSheetModal>
 
       <BottomSheetModal visible={isAddingManaged} onClose={() => setIsAddingManaged(false)}>
-        <Text style={styles.modalTitle}>Add a member without a phone</Text>
-        <TextField value={managedNameDraft} onChangeText={setManagedNameDraft} placeholder="Their name" autoFocus />
+        <Text style={styles.modalTitle}>{t("settings.addMemberNoPhone")}</Text>
+        <TextField value={managedNameDraft} onChangeText={setManagedNameDraft} placeholder={t("settings.theirNamePlaceholder")} autoFocus />
         <Button
-          label="Add"
+          label={t("common.add")}
           onPress={handleAddManagedMember}
           loading={isAddingManagedSaving}
           style={styles.saveButton}
@@ -348,9 +366,9 @@ export default function SettingsScreen() {
       </BottomSheetModal>
 
       <BottomSheetModal visible={!!renamingMemberId} onClose={() => setRenamingMemberId(null)}>
-        <Text style={styles.modalTitle}>Rename member</Text>
-        <TextField value={renameDraft} onChangeText={setRenameDraft} placeholder="Name" autoFocus />
-        <Button label="Save" onPress={handleRenameMember} style={styles.saveButton} />
+        <Text style={styles.modalTitle}>{t("settings.renameMember")}</Text>
+        <TextField value={renameDraft} onChangeText={setRenameDraft} placeholder={t("settings.namePlaceholder")} autoFocus />
+        <Button label={t("common.save")} onPress={handleRenameMember} style={styles.saveButton} />
       </BottomSheetModal>
     </View>
   );
@@ -404,6 +422,16 @@ const styles = StyleSheet.create({
   tintPurple: { backgroundColor: colors.purpleTint },
   tintMint: { backgroundColor: colors.greenTint },
   tintGold: { backgroundColor: colors.goldTint },
+  languageRow: { flexDirection: "row", padding: spacing.xs },
+  languageOption: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    borderRadius: radii.lg,
+  },
+  languageOptionSelected: { backgroundColor: colors.white },
+  languageOptionText: { fontSize: 15, fontWeight: "700", color: colors.textMuted },
+  languageOptionTextSelected: { color: colors.purple },
   listRow: {
     flexDirection: "row",
     alignItems: "center",

@@ -3,10 +3,11 @@ import { ActivityIndicator, SectionList, StyleSheet, Switch, Text, TouchableOpac
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useTranslation } from "react-i18next";
 import { useEvents, type CalendarEvent, type RecurrenceInput } from "@/hooks/useEvents";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
 import { useCalendarPrefs } from "@/hooks/useCalendarPrefs";
-import { isThisWeek, startOfWeek } from "@/lib/dateUtils";
+import { formatDate, formatTime, isThisWeek, startOfWeek } from "@/lib/dateUtils";
 import { expandOccurrences } from "@/lib/recurrence";
 import { getHolidayMarkers } from "@/lib/holidayMarkers";
 import { getMemberColor, NEUTRAL_COLOR } from "@/lib/memberColors";
@@ -36,6 +37,7 @@ function startOfDay(date: Date): Date {
 }
 
 export default function CalendarScreen() {
+  const { t, i18n } = useTranslation();
   const { events, isLoading, addEvent, deleteEvent } = useEvents();
   const { members } = useFamilyMembers();
   const { prefs: calendarPrefs } = useCalendarPrefs();
@@ -68,10 +70,8 @@ export default function CalendarScreen() {
   );
 
   const listRange = useMemo(() => {
-    const now = new Date();
-    const start = new Date(now);
-    start.setFullYear(start.getFullYear() - 2);
-    const end = new Date(now);
+    const start = startOfDay(new Date());
+    const end = new Date(start);
     end.setFullYear(end.getFullYear() + 2);
     return { start, end };
   }, []);
@@ -145,7 +145,7 @@ export default function CalendarScreen() {
     return Array.from(byDate.entries())
       .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
       .map(([dateKey, occs]) => ({
-        title: new Date(dateKey).toLocaleDateString(undefined, {
+        title: formatDate(new Date(dateKey), {
           weekday: "long",
           month: "short",
           day: "numeric",
@@ -153,7 +153,7 @@ export default function CalendarScreen() {
         isThisWeek: isThisWeek(new Date(dateKey)),
         data: occs,
       }));
-  }, [listOccurrences]);
+  }, [listOccurrences, i18n.language]);
 
   function navigateWeek(dir: -1 | 1) {
     const next = new Date(weekAnchor);
@@ -215,11 +215,11 @@ export default function CalendarScreen() {
   return (
     <View style={styles.container}>
       <TabScreenHeader
-        title="Calendar"
+        title={t("calendar.tabTitle")}
         icon="calendar"
         tint={sectionColors.calendar}
         tintBackground={sectionTints.calendar}
-        actionLabel="+ Add Event"
+        actionLabel={t("calendar.addEventAction")}
         onAction={() => setIsAdding(true)}
         onIconPress={() => router.push("/calendar-settings")}
       />
@@ -233,14 +233,14 @@ export default function CalendarScreen() {
               onPress={() => setViewMode(mode)}
             >
               <Text style={[styles.viewSwitcherText, viewMode === mode && styles.viewSwitcherTextActive]}>
-                {mode === "list" ? "List" : mode === "week" ? "Week" : "Month"}
+                {mode === "list" ? t("calendar.viewList") : mode === "week" ? t("calendar.viewWeek") : t("calendar.viewMonth")}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
         {viewMode !== "list" && (
           <TouchableOpacity style={styles.todayButton} onPress={goToToday}>
-            <Text style={styles.todayButtonText}>Today</Text>
+            <Text style={styles.todayButtonText}>{t("calendar.today")}</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity style={styles.timetableButton} onPress={() => router.push("/timetable")}>
@@ -250,7 +250,7 @@ export default function CalendarScreen() {
 
       <View style={styles.filterRow}>
         <Chip
-          label="Everyone"
+          label={t("common.everyone")}
           selected={memberFilter === null}
           onPress={() => setMemberFilter(null)}
           color={NEUTRAL_COLOR}
@@ -258,7 +258,7 @@ export default function CalendarScreen() {
         {members.map((m) => (
           <Chip
             key={m.id}
-            label={m.full_name ?? "Member"}
+            label={m.full_name ?? t("common.member")}
             selected={memberFilter === m.id}
             onPress={() => setMemberFilter(m.id)}
             color={getMemberColor(m)}
@@ -274,7 +274,7 @@ export default function CalendarScreen() {
           renderSectionHeader={({ section }) => (
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionHeaderText}>{section.title}</Text>
-              {section.isThisWeek && <Text style={styles.weekBadge}>This week</Text>}
+              {section.isThisWeek && <Text style={styles.weekBadge}>{t("calendar.thisWeek")}</Text>}
             </View>
           )}
           renderItem={({ item }) => (
@@ -285,7 +285,7 @@ export default function CalendarScreen() {
               onDelete={() => deleteEvent(item.event.id)}
             />
           )}
-          ListEmptyComponent={<Text style={styles.emptyText}>No events yet. Tap + Add Event to create one.</Text>}
+          ListEmptyComponent={<Text style={styles.emptyText}>{t("calendar.noEventsYet")}</Text>}
         />
       )}
 
@@ -323,24 +323,24 @@ export default function CalendarScreen() {
       )}
 
       <BottomSheetModal visible={isAdding} onClose={() => setIsAdding(false)} contentStyle={styles.modalContentScrollable}>
-        <ModalTitle icon="calendar" tint={sectionColors.calendar} tintBackground={sectionTints.calendar} title="New event" />
-        <TextField placeholder="Event title" value={title} onChangeText={setTitle} autoFocus />
+        <ModalTitle icon="calendar" tint={sectionColors.calendar} tintBackground={sectionTints.calendar} title={t("calendar.newEvent")} />
+        <TextField placeholder={t("calendar.eventTitlePlaceholder")} value={title} onChangeText={setTitle} autoFocus />
 
         <View style={styles.switchRow}>
-          <FieldLabel icon="sunny-outline" label="All day" />
+          <FieldLabel icon="sunny-outline" label={t("common.allDay")} />
           <Switch value={allDay} onValueChange={setAllDay} trackColor={{ false: colors.border, true: sectionColors.calendar }} />
         </View>
 
         <View style={styles.dateRow}>
           <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
             <Ionicons name="calendar-outline" size={15} color={sectionColors.calendar} />
-            <Text style={styles.dateButtonText}>{date.toLocaleDateString()}</Text>
+            <Text style={styles.dateButtonText}>{formatDate(date)}</Text>
           </TouchableOpacity>
           {!allDay && (
             <TouchableOpacity style={styles.dateButton} onPress={() => setShowTimePicker(true)}>
               <Ionicons name="time-outline" size={15} color={sectionColors.calendar} />
               <Text style={styles.dateButtonText}>
-                {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                {formatTime(date, { hour: "2-digit", minute: "2-digit" })}
               </Text>
             </TouchableOpacity>
           )}
@@ -391,7 +391,7 @@ export default function CalendarScreen() {
         <EventReminderPicker value={reminderOffsets} onChange={setReminderOffsets} tint={sectionColors.calendar} />
 
         <View style={styles.switchRow}>
-          <FieldLabel icon="lock-closed-outline" label="Keep it private" />
+          <FieldLabel icon="lock-closed-outline" label={t("common.keepItPrivate")} />
           <Switch
             value={isPrivate}
             onValueChange={setIsPrivate}
@@ -399,7 +399,7 @@ export default function CalendarScreen() {
           />
         </View>
 
-        <Button label="Add event" onPress={handleAddEvent} style={styles.submitButton} />
+        <Button label={t("calendar.addEvent")} onPress={handleAddEvent} style={styles.submitButton} />
       </BottomSheetModal>
     </View>
   );

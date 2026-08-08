@@ -3,9 +3,11 @@ import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } f
 import { router, useLocalSearchParams } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useEvents, type RecurrenceInput } from "@/hooks/useEvents";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
 import { useProfile } from "@/hooks/useProfile";
+import { formatDate, formatTime } from "@/lib/dateUtils";
 import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
 import { FieldLabel } from "@/components/FieldLabel";
@@ -15,6 +17,7 @@ import { ForWhoPicker } from "@/components/calendar/ForWhoPicker";
 import { colors, radii, sectionColors, spacing } from "@/lib/theme";
 
 export default function EventDetailScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { events, updateEvent, deleteEvent } = useEvents();
   const { members } = useFamilyMembers();
@@ -84,10 +87,10 @@ export default function EventDetailScreen() {
 
   function handleDelete() {
     if (!event) return;
-    Alert.alert("Delete event?", "This can't be undone.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("calendar.deleteEventTitle"), t("common.thisCantBeUndone"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: t("common.delete"),
         style: "destructive",
         onPress: () => {
           deleteEvent(event.id);
@@ -104,11 +107,11 @@ export default function EventDetailScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Event</Text>
+          <Text style={styles.headerTitle}>{t("calendar.event")}</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.center}>
-          <Text style={styles.emptyText}>Event not found</Text>
+          <Text style={styles.emptyText}>{t("calendar.eventNotFound")}</Text>
         </View>
       </View>
     );
@@ -120,32 +123,34 @@ export default function EventDetailScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Event</Text>
+        <Text style={styles.headerTitle}>{t("calendar.editEvent")}</Text>
         <TouchableOpacity onPress={handleDelete}>
           <Ionicons name="trash-outline" size={22} color={colors.danger} />
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <FieldLabel icon="create-outline" label="Title" />
-        <TextField placeholder="Event title" value={title} onChangeText={setTitle} />
-        <Text style={styles.creatorText}>Added by {isCreator ? "you" : creator?.full_name ?? "a family member"}</Text>
+        <FieldLabel icon="create-outline" label={t("common.title")} />
+        <TextField placeholder={t("calendar.eventTitlePlaceholder")} value={title} onChangeText={setTitle} />
+        <Text style={styles.creatorText}>
+          {t("common.addedBy", { name: isCreator ? t("common.you") : creator?.full_name ?? t("common.aFamilyMember") })}
+        </Text>
 
         <View style={styles.switchRow}>
-          <FieldLabel icon="sunny-outline" label="All day" />
+          <FieldLabel icon="sunny-outline" label={t("common.allDay")} />
           <Switch value={allDay} onValueChange={setAllDay} trackColor={{ false: colors.border, true: sectionColors.calendar }} />
         </View>
 
         <View style={styles.dateRow}>
           <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
             <Ionicons name="calendar-outline" size={15} color={sectionColors.calendar} />
-            <Text style={styles.dateButtonText}>{date.toLocaleDateString()}</Text>
+            <Text style={styles.dateButtonText}>{formatDate(date)}</Text>
           </TouchableOpacity>
           {!allDay && (
             <TouchableOpacity style={styles.dateButton} onPress={() => setShowTimePicker(true)}>
               <Ionicons name="time-outline" size={15} color={sectionColors.calendar} />
               <Text style={styles.dateButtonText}>
-                {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                {formatTime(date, { hour: "2-digit", minute: "2-digit" })}
               </Text>
             </TouchableOpacity>
           )}
@@ -181,8 +186,8 @@ export default function EventDetailScreen() {
           />
         )}
 
-        <FieldLabel icon="location-outline" label="Location" />
-        <TextField placeholder="Where is it?" value={location} onChangeText={setLocation} />
+        <FieldLabel icon="location-outline" label={t("calendar.location")} />
+        <TextField placeholder={t("calendar.wherePlaceholder")} value={location} onChangeText={setLocation} />
 
         <RecurrencePicker value={recurrence} onChange={setRecurrence} tint={sectionColors.calendar} />
 
@@ -200,7 +205,7 @@ export default function EventDetailScreen() {
 
         {isCreator && (
           <View style={styles.switchRow}>
-            <FieldLabel icon="lock-closed-outline" label="Keep it private" />
+            <FieldLabel icon="lock-closed-outline" label={t("common.keepItPrivate")} />
             <Switch
               value={isPrivate}
               onValueChange={setIsPrivate}
@@ -209,16 +214,16 @@ export default function EventDetailScreen() {
           </View>
         )}
 
-        <FieldLabel icon="document-text-outline" label="More details" />
+        <FieldLabel icon="document-text-outline" label={t("common.moreDetails")} />
         <TextField
-          placeholder="Notes, what to bring, etc."
+          placeholder={t("calendar.detailsPlaceholder")}
           value={details}
           onChangeText={setDetails}
           multiline
           style={styles.detailsInput}
         />
 
-        <Button label="Save" onPress={handleSave} loading={isSaving} style={styles.saveButton} />
+        <Button label={t("common.save")} onPress={handleSave} loading={isSaving} style={styles.saveButton} />
       </ScrollView>
     </View>
   );

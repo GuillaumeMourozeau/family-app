@@ -10,7 +10,8 @@
     "userInterfaceStyle": "light",
     "plugins": [
       "expo-router",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-localization"
     ],
     "ios": {
       "supportsTablet": true,

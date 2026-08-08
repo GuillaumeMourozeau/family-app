@@ -1,10 +1,12 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
+import { useTranslation } from "react-i18next";
 import type { CalendarEvent } from "@/hooks/useEvents";
 import type { FamilyMember } from "@/hooks/useFamilyMembers";
 import { useProfile } from "@/hooks/useProfile";
 import { getEventDotColors } from "@/lib/memberColors";
 import { isNewItem } from "@/lib/newBadge";
+import { formatTime } from "@/lib/dateUtils";
 import { colors, radii, spacing } from "@/lib/theme";
 
 type Props = {
@@ -15,13 +17,14 @@ type Props = {
 };
 
 export function EventRow({ event, startAt, members, onDelete }: Props) {
+  const { t } = useTranslation();
   const { profile } = useProfile();
   const participantNames = event.applies_to_whole_family
-    ? "Whole family"
+    ? t("common.wholeFamily")
     : event.participant_ids
         .map((id) => members.find((m) => m.id === id)?.full_name)
         .filter(Boolean)
-        .join(", ") || "Unassigned";
+        .join(", ") || t("common.unassigned");
   const dotColors = getEventDotColors(event, members);
 
   return (
@@ -37,10 +40,10 @@ export function EventRow({ event, startAt, members, onDelete }: Props) {
             {event.is_private && <Text style={styles.lockIcon}>🔒</Text>}
             <Text style={styles.rowTitle}>{event.title}</Text>
             {event.recurrence_freq && <Text style={styles.repeatIcon}>🔁</Text>}
-            {isNewItem(event.created_at, event.created_by, profile) && <Text style={styles.newBadge}>New</Text>}
+            {isNewItem(event.created_at, event.created_by, profile) && <Text style={styles.newBadge}>{t("common.new")}</Text>}
           </View>
           <Text style={styles.rowSubtitle}>
-            {event.all_day ? "All day" : startAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {event.all_day ? t("common.allDay") : formatTime(startAt, { hour: "2-digit", minute: "2-digit" })}
             {"  ·  "}
             {participantNames}
           </Text>

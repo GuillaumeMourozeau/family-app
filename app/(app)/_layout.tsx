@@ -1,5 +1,6 @@
 import { Redirect, Stack, usePathname } from "expo-router";
 import { ActivityIndicator, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
 import { ProfileProvider, useProfile } from "@/hooks/useProfile";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -46,6 +47,7 @@ function FamilyGate({ children }: { children: React.ReactNode }) {
 }
 
 export default function AppLayout() {
+  const { t } = useTranslation();
   const { session, isLoading } = useAuth();
 
   if (isLoading) {
@@ -53,7 +55,7 @@ export default function AppLayout() {
   }
 
   if (!session) {
-    return <ErrorScreen message="Couldn't connect. Check your internet connection and reopen the app." />;
+    return <ErrorScreen message={t("common.couldntConnect")} />;
   }
 
   return (

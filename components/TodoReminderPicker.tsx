@@ -2,10 +2,11 @@ import { useState } from "react";
 import { StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Chip } from "@/components/Chip";
 import { FieldLabel } from "@/components/FieldLabel";
 import { colors, spacing } from "@/lib/theme";
-import { todoReminderSummary, WEEKDAY_LABELS, type TodoReminder, type TodoReminderFreq } from "@/lib/reminders";
+import { todoReminderSummary, type TodoReminder, type TodoReminderFreq } from "@/lib/reminders";
 
 const DEFAULT_REMINDER: TodoReminder = { freq: "daily", time: "09:00", weekday: new Date().getDay() };
 
@@ -27,6 +28,8 @@ type Props = {
 };
 
 export function TodoReminderPicker({ value, onChange, tint }: Props) {
+  const { t } = useTranslation();
+  const weekdayLabels = t("common.weekdaysVeryShort", { returnObjects: true }) as unknown as string[];
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   function setFreq(freq: TodoReminderFreq) {
@@ -41,7 +44,7 @@ export function TodoReminderPicker({ value, onChange, tint }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.switchRow}>
-        <FieldLabel icon="alarm-outline" label="Reminder" />
+        <FieldLabel icon="alarm-outline" label={t("todo.reminder")} />
         <Switch
           value={!!value}
           onValueChange={(enabled) => onChange(enabled ? DEFAULT_REMINDER : null)}
@@ -52,13 +55,13 @@ export function TodoReminderPicker({ value, onChange, tint }: Props) {
       {value && (
         <>
           <View style={styles.chipRow}>
-            <Chip label="Every day" selected={value.freq === "daily"} onPress={() => setFreq("daily")} />
-            <Chip label="Every week" selected={value.freq === "weekly"} onPress={() => setFreq("weekly")} />
+            <Chip label={t("todo.everyDay")} selected={value.freq === "daily"} onPress={() => setFreq("daily")} />
+            <Chip label={t("todo.everyWeekChip")} selected={value.freq === "weekly"} onPress={() => setFreq("weekly")} />
           </View>
 
           {value.freq === "weekly" && (
             <View style={styles.dayRow}>
-              {WEEKDAY_LABELS.map((label, index) => {
+              {weekdayLabels.map((label, index) => {
                 const selected = (value.weekday ?? 0) === index;
                 return (
                   <TouchableOpacity
@@ -75,7 +78,7 @@ export function TodoReminderPicker({ value, onChange, tint }: Props) {
 
           <TouchableOpacity style={styles.timeButton} onPress={() => setShowTimePicker(true)}>
             <Ionicons name="time-outline" size={15} color={tint} />
-            <Text style={styles.timeButtonText}>{todoReminderSummary(value)}</Text>
+            <Text style={styles.timeButtonText}>{todoReminderSummary(value, t)}</Text>
           </TouchableOpacity>
           {showTimePicker && (
             <DateTimePicker
@@ -89,7 +92,7 @@ export function TodoReminderPicker({ value, onChange, tint }: Props) {
             />
           )}
 
-          <Text style={styles.summary}>Repeats until this task is marked done.</Text>
+          <Text style={styles.summary}>{t("todo.repeatsUntilDone")}</Text>
         </>
       )}
     </View>

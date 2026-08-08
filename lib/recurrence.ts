@@ -1,3 +1,5 @@
+import { formatDate } from "@/lib/dateUtils";
+
 export type RecurrenceFreq = "daily" | "weekly" | "monthly" | "yearly";
 export type RecurrenceEndType = "never" | "on_date" | "after_count";
 
@@ -127,29 +129,38 @@ export function expandOccurrences<T extends RecurringEventLike>(
   return results.sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
 }
 
-export function recurrenceSummary(rule: {
-  freq: RecurrenceFreq | null;
-  interval: number;
-  daysOfWeek: number[] | null;
-  endType: RecurrenceEndType;
-  endDate: Date | null;
-  count: number | null;
-}): string {
-  if (!rule.freq) return "Does not repeat";
-  const unit = { daily: "day", weekly: "week", monthly: "month", yearly: "year" }[rule.freq];
-  const every = rule.interval === 1 ? `Every ${unit}` : `Every ${rule.interval} ${unit}s`;
+type TFunction = (key: string, options?: Record<string, unknown>) => string;
 
-  const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+export function recurrenceSummary(
+  rule: {
+    freq: RecurrenceFreq | null;
+    interval: number;
+    daysOfWeek: number[] | null;
+    endType: RecurrenceEndType;
+    endDate: Date | null;
+    count: number | null;
+  },
+  t: TFunction
+): string {
+  if (!rule.freq) return t("calendar.doesNotRepeat");
+  const everyKey = { daily: "everyDaily", weekly: "everyWeekly", monthly: "everyMonthly", yearly: "everyYearly" }[
+    rule.freq
+  ];
+  const every = t(`calendar.${everyKey}`, { count: rule.interval });
+
+  const dayLabels = t("calendar.weekdaysVeryShort", { returnObjects: true }) as unknown as string[];
   const days =
     rule.freq === "weekly" && rule.daysOfWeek && rule.daysOfWeek.length > 0
-      ? ` on ${[...rule.daysOfWeek].sort((a, b) => a - b).map((d) => DAY_LABELS[d]).join(", ")}`
+      ? t("calendar.onDays", {
+          days: [...rule.daysOfWeek].sort((a, b) => a - b).map((d) => dayLabels[d]).join(", "),
+        })
       : "";
 
   const end =
     rule.endType === "on_date" && rule.endDate
-      ? ` until ${rule.endDate.toLocaleDateString()}`
+      ? t("calendar.untilDate", { date: formatDate(rule.endDate) })
       : rule.endType === "after_count" && rule.count
-        ? `, ${rule.count} times`
+        ? t("calendar.timesCount", { count: rule.count })
         : "";
 
   return `${every}${days}${end}`;

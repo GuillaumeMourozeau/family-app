@@ -13,6 +13,8 @@ export type Todo = {
   is_complete: boolean;
   assigned_to: string | null;
   priority: TodoPriority;
+  category_id: string | null;
+  due_date: string | null;
   created_at: string;
   is_private: boolean;
   created_by: string;
@@ -77,7 +79,9 @@ export function useTodos() {
     assignedTo: string | null,
     priority: TodoPriority,
     isPrivate: boolean = false,
-    reminder: TodoReminder | null = null
+    reminder: TodoReminder | null = null,
+    categoryId: string | null = null,
+    dueDate: string | null = null
   ) {
     if (!familyId || !profile) return;
     await supabase.from("todos").insert({
@@ -85,6 +89,8 @@ export function useTodos() {
       title,
       assigned_to: assignedTo,
       priority,
+      category_id: categoryId,
+      due_date: dueDate,
       created_by: profile.id,
       is_private: isPrivate,
       ...reminderToColumns(reminder),
@@ -116,6 +122,8 @@ export function useTodos() {
       title: string;
       assignedTo: string | null;
       priority: TodoPriority;
+      categoryId: string | null;
+      dueDate: string | null;
       description: string | null;
       isPrivate: boolean;
       reminder: TodoReminder | null;
@@ -127,6 +135,8 @@ export function useTodos() {
         title: input.title,
         assigned_to: input.assignedTo,
         priority: input.priority,
+        category_id: input.categoryId,
+        due_date: input.dueDate,
         description: input.description,
         is_private: input.isPrivate,
         ...reminderToColumns(input.reminder),

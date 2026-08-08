@@ -1,6 +1,7 @@
 import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useCalendarPrefs } from "@/hooks/useCalendarPrefs";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
 import { Chip } from "@/components/Chip";
@@ -12,6 +13,7 @@ import { colors, radii, sectionColors, spacing } from "@/lib/theme";
 const ZONES: SchoolZone[] = ["A", "B", "C"];
 
 export default function CalendarSettingsScreen() {
+  const { t } = useTranslation();
   const { prefs, updatePrefs } = useCalendarPrefs();
   const { members, updateMemberColor } = useFamilyMembers();
 
@@ -21,50 +23,50 @@ export default function CalendarSettingsScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Calendar Settings</Text>
+        <Text style={styles.headerTitle}>{t("calendarSettings.title")}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionLabel}>Holidays</Text>
+        <Text style={styles.sectionLabel}>{t("calendarSettings.holidays")}</Text>
         <View style={styles.card}>
           <View style={styles.switchRow}>
-            <Text style={styles.rowLabel}>Public holidays</Text>
+            <Text style={styles.rowLabel}>{t("calendarSettings.publicHolidays")}</Text>
             <Switch
               value={prefs.show_public_holidays}
               onValueChange={(v) => updatePrefs({ show_public_holidays: v })}
             />
           </View>
           <View style={styles.switchRow}>
-            <Text style={styles.rowLabel}>French school holidays</Text>
+            <Text style={styles.rowLabel}>{t("calendarSettings.schoolHolidays")}</Text>
             <Switch
               value={prefs.show_school_holidays}
               onValueChange={(v) => updatePrefs({ show_school_holidays: v })}
             />
           </View>
-          <Text style={styles.label}>School holiday zone</Text>
+          <Text style={styles.label}>{t("calendarSettings.schoolHolidayZone")}</Text>
           <View style={styles.chipRow}>
             {ZONES.map((zone) => (
               <Chip
                 key={zone}
-                label={`Zone ${zone}`}
+                label={t("calendarSettings.zone", { zone })}
                 selected={prefs.school_zone === zone}
                 onPress={() => updatePrefs({ school_zone: zone })}
               />
             ))}
           </View>
-          <Text style={styles.label}>Color</Text>
+          <Text style={styles.label}>{t("calendarSettings.color")}</Text>
           <ColorSwatchPicker
             value={prefs.holiday_color}
             onChange={(color) => updatePrefs({ holiday_color: color })}
           />
         </View>
 
-        <Text style={styles.sectionLabel}>Member colors</Text>
+        <Text style={styles.sectionLabel}>{t("calendarSettings.memberColors")}</Text>
         <View style={styles.card}>
           {members.map((m, index) => (
             <View key={m.id} style={[styles.memberRow, index === members.length - 1 && styles.memberRowLast]}>
-              <Text style={styles.rowLabel}>{m.full_name ?? "Member"}</Text>
+              <Text style={styles.rowLabel}>{m.full_name ?? t("common.member")}</Text>
               <ColorSwatchPicker value={getMemberColor(m)} onChange={(color) => updateMemberColor(m.id, color)} />
             </View>
           ))}

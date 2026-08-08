@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useProfile } from "@/hooks/useProfile";
 import { useFamily } from "@/hooks/useFamily";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
@@ -11,7 +12,8 @@ import { useTodos } from "@/hooks/useTodos";
 import { useGroceries } from "@/hooks/useGroceries";
 import { useMessages } from "@/hooks/useMessages";
 import { useMealPlan } from "@/hooks/useMealPlan";
-import { MEAL_TYPE_ORDER, MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from "@/lib/mealTypes";
+import { MEAL_TYPE_ORDER, MEAL_TYPE_ICONS } from "@/lib/mealTypes";
+import { formatTime } from "@/lib/dateUtils";
 import { TextField } from "@/components/TextField";
 import { cardShadow, colors, gradients, radii, sectionColors, sectionTints, spacing } from "@/lib/theme";
 import { expandOccurrences } from "@/lib/recurrence";
@@ -29,14 +31,15 @@ type ActivityItem = {
 
 const ACTIVITY_META: Record<
   ActivityKind,
-  { icon: keyof typeof Ionicons.glyphMap; color: string; tint: string; label: string; route: string }
+  { icon: keyof typeof Ionicons.glyphMap; color: string; tint: string; labelKey: string; route: string }
 > = {
-  event: { icon: "calendar", color: sectionColors.calendar, tint: sectionTints.calendar, label: "Calendar", route: "/event" },
-  todo: { icon: "checkmark-circle", color: sectionColors.todo, tint: sectionTints.todo, label: "To-Do", route: "/todo" },
-  grocery: { icon: "cart", color: sectionColors.groceries, tint: sectionTints.groceries, label: "Groceries", route: "/grocery" },
+  event: { icon: "calendar", color: sectionColors.calendar, tint: sectionTints.calendar, labelKey: "common.category.calendar", route: "/event" },
+  todo: { icon: "checkmark-circle", color: sectionColors.todo, tint: sectionTints.todo, labelKey: "common.category.todo", route: "/todo" },
+  grocery: { icon: "cart", color: sectionColors.groceries, tint: sectionTints.groceries, labelKey: "common.category.groceries", route: "/grocery" },
 };
 
 export default function HomeScreen() {
+  const { t } = useTranslation();
   const { profile, markActivitySeen } = useProfile();
   const { family } = useFamily();
   const { members } = useFamilyMembers();
@@ -102,23 +105,25 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <LinearGradient colors={gradients.primary} style={styles.banner} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
         <View style={styles.topRow}>
-          <Text style={styles.familyName}>{family?.name ?? "Your family"}</Text>
+          <Text style={styles.familyName}>{family?.name ?? t("home.yourFamily")}</Text>
           <TouchableOpacity style={styles.settingsButton} onPress={() => router.push("/settings")}>
             <Ionicons name="settings-outline" size={20} color={colors.white} />
           </TouchableOpacity>
         </View>
-        <Text style={styles.subtext}>Hi {profile?.full_name ?? "there"} 👋 — here's what's up today</Text>
+        <Text style={styles.subtext}>
+          {t("home.greeting", { name: profile?.full_name || t("home.thereDefaultName") })}
+        </Text>
       </LinearGradient>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {visibleSections.includes("messages") && (
           <>
-            <SectionTitle icon="chatbubble-ellipses" tint={sectionColors.home} tintBg={colors.primaryMuted} label="Important Messages" />
+            <SectionTitle icon="chatbubble-ellipses" tint={sectionColors.home} tintBg={colors.primaryMuted} label={t("home.sections.messages")} />
             <View style={styles.card}>
               <View style={styles.messageInputRow}>
                 <TextField
                   style={styles.messageInput}
-                  placeholder="Your quick update..."
+                  placeholder={t("home.messagePlaceholder")}
                   value={messageDraft}
                   onChangeText={setMessageDraft}
                   maxLength={MESSAGE_MAX_LENGTH}
@@ -129,14 +134,14 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
               {messages.length === 0 ? (
-                <Text style={styles.emptyText}>No messages yet</Text>
+                <Text style={styles.emptyText}>{t("home.noMessagesYet")}</Text>
               ) : (
                 messages.map((m) => {
                   const isMine = m.profile_id === profile?.id;
                   const author = members.find((mem) => mem.id === m.profile_id);
                   return (
                     <View key={m.profile_id} style={styles.messageRow}>
-                      <Text style={styles.messageAuthor}>{isMine ? "You" : author?.full_name ?? "Member"}</Text>
+                      <Text style={styles.messageAuthor}>{isMine ? t("common.youCapitalized") : author?.full_name ?? t("common.member")}</Text>
                       <Text style={styles.messageContent} numberOfLines={1}>
                         {m.content}
                       </Text>
@@ -159,12 +164,12 @@ export default function HomeScreen() {
               icon="sparkles"
               tint={colors.blue}
               tintBg={colors.blueTint}
-              label="What's New"
-              action={activityItems.length > 0 ? { label: "Clear", onPress: markActivitySeen } : undefined}
+              label={t("home.sections.whatsNew")}
+              action={activityItems.length > 0 ? { label: t("common.clear"), onPress: markActivitySeen } : undefined}
             />
             <View style={styles.card}>
               {activityItems.length === 0 ? (
-                <Text style={styles.emptyText}>Nothing new since you last checked</Text>
+                <Text style={styles.emptyText}>{t("home.nothingNewSinceLastChecked")}</Text>
               ) : (
                 activityItems.map((item, index) => {
                   const meta = ACTIVITY_META[item.kind];
@@ -183,7 +188,7 @@ export default function HomeScreen() {
                           {item.title}
                         </Text>
                         <Text style={styles.rowAssignee}>
-                          {author?.full_name ?? "Member"} · {meta.label}
+                          {author?.full_name ?? t("common.member")} · {t(meta.labelKey)}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -200,12 +205,12 @@ export default function HomeScreen() {
               icon="calendar"
               tint={sectionColors.calendar}
               tintBg={sectionTints.calendar}
-              label="Today"
+              label={t("home.sections.today")}
               onPress={() => router.push("/calendar")}
             />
             {todaysEventOccurrences.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>No events today</Text>
+                <Text style={styles.emptyText}>{t("home.noEventsToday")}</Text>
               </View>
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hscroll}>
@@ -216,7 +221,7 @@ export default function HomeScreen() {
                     onPress={() => router.push(`/event/${occ.event.id}`)}
                   >
                     <Text style={styles.eventTime}>
-                      {occ.event.all_day ? "All day" : occ.startAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {occ.event.all_day ? t("common.allDay") : formatTime(occ.startAt, { hour: "2-digit", minute: "2-digit" })}
                     </Text>
                     <Text style={styles.eventTitle} numberOfLines={2}>
                       {occ.event.title}
@@ -234,12 +239,12 @@ export default function HomeScreen() {
               icon="alert-circle"
               tint={colors.danger}
               tintBg={colors.dangerTint}
-              label="Urgent To-Do"
+              label={t("home.sections.urgentTodo")}
               onPress={() => router.push("/todos")}
             />
             <View style={styles.card}>
               {urgentTodos.length === 0 ? (
-                <Text style={styles.emptyText}>Nothing urgent right now</Text>
+                <Text style={styles.emptyText}>{t("home.nothingUrgentRightNow")}</Text>
               ) : (
                 urgentTodos.map((todo, index) => {
                   const assignee = members.find((m) => m.id === todo.assigned_to);
@@ -262,7 +267,7 @@ export default function HomeScreen() {
                         >
                           {todo.title}
                         </Text>
-                        {assignee && <Text style={styles.rowAssignee}>{assignee.full_name ?? "Member"}</Text>}
+                        {assignee && <Text style={styles.rowAssignee}>{assignee.full_name ?? t("common.member")}</Text>}
                       </TouchableOpacity>
                     </View>
                   );
@@ -278,12 +283,12 @@ export default function HomeScreen() {
               icon="restaurant"
               tint={sectionColors.meals}
               tintBg={sectionTints.meals}
-              label="Today's Meals"
+              label={t("home.sections.todaysMeals")}
               onPress={() => router.push("/meals")}
             />
             {todaysMeals.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>No meals planned today</Text>
+                <Text style={styles.emptyText}>{t("home.noMealsPlannedToday")}</Text>
               </View>
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hscroll}>
@@ -291,7 +296,7 @@ export default function HomeScreen() {
                   <TouchableOpacity key={meal.id} style={styles.mealPill} onPress={() => router.push("/meals")}>
                     <View style={styles.mealPillHeader}>
                       <Ionicons name={MEAL_TYPE_ICONS[meal.meal_type]} size={12} color={sectionColors.meals} />
-                      <Text style={styles.mealPillType}>{MEAL_TYPE_LABELS[meal.meal_type]}</Text>
+                      <Text style={styles.mealPillType}>{t(`common.mealTypes.${meal.meal_type}`)}</Text>
                     </View>
                     <Text style={styles.eventTitle} numberOfLines={2}>
                       {meal.title}

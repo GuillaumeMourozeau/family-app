@@ -1,14 +1,12 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import type { Occurrence } from "@/lib/recurrence";
 import type { CalendarEvent } from "@/hooks/useEvents";
 import type { FamilyMember } from "@/hooks/useFamilyMembers";
 import type { HolidayMarker } from "@/lib/holidayMarkers";
 import { getEventDotColors } from "@/lib/memberColors";
-import { isToday } from "@/lib/dateUtils";
-import { startOfWeek } from "@/lib/dateUtils";
+import { formatDate, isToday, startOfWeek } from "@/lib/dateUtils";
 import { colors, radii, sectionColors, spacing } from "@/lib/theme";
-
-const DAY_INITIALS = ["M", "T", "W", "T", "F", "S", "S"];
 
 type Props = {
   monthAnchor: Date;
@@ -21,6 +19,8 @@ type Props = {
 };
 
 export function MonthGrid({ monthAnchor, selectedDay, occurrences, members, holidays, onSelectDay, onNavigate }: Props) {
+  const { t } = useTranslation();
+  const dayInitials = t("common.weekdaysInitialMonFirst", { returnObjects: true }) as unknown as string[];
   const monthStart = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(), 1);
   const monthEnd = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0);
   const gridStart = startOfWeek(monthStart);
@@ -32,7 +32,7 @@ export function MonthGrid({ monthAnchor, selectedDay, occurrences, members, holi
     days.push(new Date(cursor));
   }
 
-  const headerLabel = monthAnchor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const headerLabel = formatDate(monthAnchor, { month: "long", year: "numeric" });
 
   return (
     <View>
@@ -46,7 +46,7 @@ export function MonthGrid({ monthAnchor, selectedDay, occurrences, members, holi
         </TouchableOpacity>
       </View>
       <View style={styles.weekdayRow}>
-        {DAY_INITIALS.map((label, i) => (
+        {dayInitials.map((label, i) => (
           <Text key={i} style={styles.weekdayLabel}>
             {label}
           </Text>

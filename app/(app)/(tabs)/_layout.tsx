@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { colors } from "@/lib/theme";
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -14,6 +15,7 @@ function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
 }
 
 export default function TabsLayout() {
+  const { t } = useTranslation();
   return (
     <Tabs
       screenOptions={{
@@ -27,14 +29,14 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
+          title: t("home.tabTitle"),
           tabBarIcon: ({ focused }) => <TabIcon name={focused ? "home" : "home-outline"} focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="calendar"
         options={{
-          title: "Calendar",
+          title: t("calendar.tabTitle"),
           tabBarIcon: ({ focused }) => (
             <TabIcon name={focused ? "calendar" : "calendar-outline"} focused={focused} />
           ),
@@ -43,7 +45,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="todos"
         options={{
-          title: "To-Do",
+          title: t("todo.tabTitle"),
           tabBarIcon: ({ focused }) => (
             <TabIcon name={focused ? "checkmark-circle" : "checkmark-circle-outline"} focused={focused} />
           ),
@@ -52,14 +54,14 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="groceries"
         options={{
-          title: "Groceries",
+          title: t("groceries.tabTitle"),
           tabBarIcon: ({ focused }) => <TabIcon name={focused ? "cart" : "cart-outline"} focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="meals"
         options={{
-          title: "Meals",
+          title: t("meals.tabTitle"),
           tabBarIcon: ({ focused }) => <TabIcon name={focused ? "restaurant" : "restaurant-outline"} focused={focused} />,
         }}
       />

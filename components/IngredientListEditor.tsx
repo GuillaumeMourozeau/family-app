@@ -1,5 +1,6 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import type { IngredientInput } from "@/hooks/useRecipes";
 import { TextField } from "@/components/TextField";
 import { colors, spacing } from "@/lib/theme";
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export function IngredientListEditor({ value, onChange, tint = colors.primary }: Props) {
+  const { t } = useTranslation();
   function updateRow(index: number, patch: Partial<IngredientInput>) {
     onChange(value.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   }
@@ -29,13 +31,13 @@ export function IngredientListEditor({ value, onChange, tint = colors.primary }:
         <View key={index} style={styles.row}>
           <TextField
             style={styles.nameInput}
-            placeholder="Ingredient"
+            placeholder={t("meals.ingredientPlaceholder")}
             value={row.name}
             onChangeText={(v) => updateRow(index, { name: v })}
           />
           <TextField
             style={styles.qtyInput}
-            placeholder="Qty"
+            placeholder={t("meals.qtyPlaceholder")}
             value={row.quantity}
             onChangeText={(v) => updateRow(index, { quantity: v })}
           />
@@ -46,7 +48,7 @@ export function IngredientListEditor({ value, onChange, tint = colors.primary }:
       ))}
       <TouchableOpacity style={styles.addRow} onPress={addRow}>
         <Ionicons name="add-circle" size={18} color={tint} />
-        <Text style={[styles.addRowText, { color: tint }]}>Add ingredient</Text>
+        <Text style={[styles.addRowText, { color: tint }]}>{t("meals.addIngredient")}</Text>
       </TouchableOpacity>
     </View>
   );

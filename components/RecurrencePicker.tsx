@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useTranslation } from "react-i18next";
 import { Chip } from "@/components/Chip";
 import { TextField } from "@/components/TextField";
+import { formatDate } from "@/lib/dateUtils";
 import { colors, radii, spacing } from "@/lib/theme";
 import { recurrenceSummary, type RecurrenceEndType, type RecurrenceFreq, type RecurrenceRule } from "@/lib/recurrence";
 
-const FREQ_OPTIONS: { value: RecurrenceFreq; label: string; unit: string }[] = [
-  { value: "daily", label: "Daily", unit: "day" },
-  { value: "weekly", label: "Weekly", unit: "week" },
-  { value: "monthly", label: "Monthly", unit: "month" },
-  { value: "yearly", label: "Yearly", unit: "year" },
+const FREQ_OPTIONS: { value: RecurrenceFreq; labelKey: string; unitKey: string }[] = [
+  { value: "daily", labelKey: "calendar.daily", unitKey: "calendar.unitDaily" },
+  { value: "weekly", labelKey: "calendar.weekly", unitKey: "calendar.unitWeekly" },
+  { value: "monthly", labelKey: "calendar.monthly", unitKey: "calendar.unitMonthly" },
+  { value: "yearly", labelKey: "calendar.yearly", unitKey: "calendar.unitYearly" },
 ];
-
-const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
 const DEFAULT_RULE: RecurrenceRule = {
   freq: "weekly",
@@ -31,6 +31,8 @@ type Props = {
 };
 
 export function RecurrencePicker({ value, onChange, tint }: Props) {
+  const { t } = useTranslation();
+  const dayLabels = t("calendar.weekdaysInitial", { returnObjects: true }) as string[];
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
   function setFreq(freq: RecurrenceFreq) {
@@ -63,18 +65,18 @@ export function RecurrencePicker({ value, onChange, tint }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Repeat</Text>
+      <Text style={styles.label}>{t("calendar.repeat")}</Text>
       <View style={styles.chipRow}>
-        <Chip label="Does not repeat" selected={!value} onPress={() => onChange(null)} />
+        <Chip label={t("calendar.doesNotRepeat")} selected={!value} onPress={() => onChange(null)} />
         {FREQ_OPTIONS.map((f) => (
-          <Chip key={f.value} label={f.label} selected={value?.freq === f.value} onPress={() => setFreq(f.value)} />
+          <Chip key={f.value} label={t(f.labelKey)} selected={value?.freq === f.value} onPress={() => setFreq(f.value)} />
         ))}
       </View>
 
       {value && (
         <>
           <View style={styles.stepperRow}>
-            <Text style={styles.stepperLabel}>Every</Text>
+            <Text style={styles.stepperLabel}>{t("calendar.every")}</Text>
             <TouchableOpacity style={styles.stepperButton} onPress={() => setInterval(value.interval - 1)}>
               <Text style={styles.stepperButtonText}>−</Text>
             </TouchableOpacity>
@@ -83,14 +85,13 @@ export function RecurrencePicker({ value, onChange, tint }: Props) {
               <Text style={styles.stepperButtonText}>+</Text>
             </TouchableOpacity>
             <Text style={styles.stepperLabel}>
-              {activeFreq?.unit}
-              {value.interval > 1 ? "s" : ""}
+              {activeFreq ? t(activeFreq.unitKey, { count: value.interval }) : ""}
             </Text>
           </View>
 
           {value.freq === "weekly" && (
             <View style={styles.dayRow}>
-              {DAY_LABELS.map((label, index) => {
+              {dayLabels.map((label, index) => {
                 const selected = (value.daysOfWeek ?? []).includes(index);
                 return (
                   <TouchableOpacity
@@ -105,17 +106,17 @@ export function RecurrencePicker({ value, onChange, tint }: Props) {
             </View>
           )}
 
-          <Text style={styles.label}>Ends</Text>
+          <Text style={styles.label}>{t("calendar.ends")}</Text>
           <View style={styles.chipRow}>
-            <Chip label="Never" selected={value.endType === "never"} onPress={() => setEndType("never")} />
-            <Chip label="On date" selected={value.endType === "on_date"} onPress={() => setEndType("on_date")} />
-            <Chip label="After N times" selected={value.endType === "after_count"} onPress={() => setEndType("after_count")} />
+            <Chip label={t("calendar.never")} selected={value.endType === "never"} onPress={() => setEndType("never")} />
+            <Chip label={t("calendar.onDate")} selected={value.endType === "on_date"} onPress={() => setEndType("on_date")} />
+            <Chip label={t("calendar.afterNTimes")} selected={value.endType === "after_count"} onPress={() => setEndType("after_count")} />
           </View>
 
           {value.endType === "on_date" && (
             <TouchableOpacity style={styles.dateButton} onPress={() => setShowEndDatePicker(true)}>
               <Text style={styles.dateButtonText}>
-                {value.endDate ? value.endDate.toLocaleDateString() : "Choose end date"}
+                {value.endDate ? formatDate(value.endDate) : t("calendar.chooseEndDate")}
               </Text>
             </TouchableOpacity>
           )}
@@ -138,13 +139,13 @@ export function RecurrencePicker({ value, onChange, tint }: Props) {
                 keyboardType="number-pad"
                 value={value.count != null ? String(value.count) : ""}
                 onChangeText={(text) => setCount(parseInt(text, 10) || 1)}
-                placeholder="10"
+                placeholder={t("calendar.timesPlaceholder")}
               />
-              <Text style={styles.stepperLabel}>times</Text>
+              <Text style={styles.stepperLabel}>{t("calendar.times")}</Text>
             </View>
           )}
 
-          <Text style={styles.summary}>{recurrenceSummary(value)}</Text>
+          <Text style={styles.summary}>{recurrenceSummary(value, t)}</Text>
         </>
       )}
     </View>

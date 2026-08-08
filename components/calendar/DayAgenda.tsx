@@ -1,9 +1,11 @@
 import { StyleSheet, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import type { Occurrence } from "@/lib/recurrence";
 import type { CalendarEvent } from "@/hooks/useEvents";
 import type { FamilyMember } from "@/hooks/useFamilyMembers";
 import type { HolidayMarker } from "@/lib/holidayMarkers";
 import { EventRow } from "@/components/calendar/EventRow";
+import { formatDate } from "@/lib/dateUtils";
 import { colors, radii, spacing } from "@/lib/theme";
 
 type Props = {
@@ -15,10 +17,11 @@ type Props = {
 };
 
 export function DayAgenda({ date, occurrences, members, holiday, onDeleteEvent }: Props) {
+  const { t } = useTranslation();
   return (
     <View>
       <Text style={styles.heading}>
-        {date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+        {formatDate(date, { weekday: "long", month: "short", day: "numeric" })}
       </Text>
       {holiday && (
         <View style={[styles.holidayBanner, { backgroundColor: `${holiday.color}22` }]}>
@@ -27,7 +30,7 @@ export function DayAgenda({ date, occurrences, members, holiday, onDeleteEvent }
         </View>
       )}
       {occurrences.length === 0 ? (
-        <Text style={styles.emptyText}>No events</Text>
+        <Text style={styles.emptyText}>{t("calendar.noEvents")}</Text>
       ) : (
         occurrences.map((occ) => (
           <EventRow

@@ -1,4 +1,5 @@
 import { StyleSheet, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import type { FamilyMember } from "@/hooks/useFamilyMembers";
 import { Chip } from "@/components/Chip";
 import { FieldLabel } from "@/components/FieldLabel";
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export function ForWhoPicker({ members, appliesToWholeFamily, participantIds, onChange }: Props) {
+  const { t } = useTranslation();
   function selectWholeFamily() {
     onChange({ appliesToWholeFamily: true, participantIds: [] });
   }
@@ -28,13 +30,13 @@ export function ForWhoPicker({ members, appliesToWholeFamily, participantIds, on
 
   return (
     <View style={styles.container}>
-      <FieldLabel icon="people-outline" label="For who" />
+      <FieldLabel icon="people-outline" label={t("common.forWho")} />
       <View style={styles.chipRow}>
-        <Chip label="Whole family" selected={appliesToWholeFamily} onPress={selectWholeFamily} color={NEUTRAL_COLOR} />
+        <Chip label={t("common.wholeFamily")} selected={appliesToWholeFamily} onPress={selectWholeFamily} color={NEUTRAL_COLOR} />
         {members.map((m) => (
           <Chip
             key={m.id}
-            label={m.full_name ?? "Member"}
+            label={m.full_name ?? t("common.member")}
             selected={!appliesToWholeFamily && participantIds.includes(m.id)}
             onPress={() => toggleMember(m.id)}
             color={getMemberColor(m)}

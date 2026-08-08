@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
 import { useMyFamilies } from "@/hooks/useMyFamilies";
@@ -12,6 +13,7 @@ import { colors, spacing } from "@/lib/theme";
 type Mode = "choose" | "create" | "join";
 
 export default function JoinFamilyScreen() {
+  const { t } = useTranslation();
   const { profile, refetch } = useProfile();
   const { refetch: refetchMyFamilies } = useMyFamilies();
   const [mode, setMode] = useState<Mode>("choose");
@@ -22,7 +24,7 @@ export default function JoinFamilyScreen() {
 
   async function handleCreate() {
     if (!name.trim() || !familyName.trim()) {
-      Alert.alert("Missing info", "Enter your name and a family name.");
+      Alert.alert(t("setup.missingInfo"), t("setup.enterNameAndFamilyName"));
       return;
     }
     setIsSubmitting(true);
@@ -32,7 +34,7 @@ export default function JoinFamilyScreen() {
     });
     setIsSubmitting(false);
     if (error) {
-      Alert.alert("Couldn't create family", error.message);
+      Alert.alert(t("setup.couldntCreateFamily"), error.message);
       return;
     }
     await Promise.all([refetch(), refetchMyFamilies()]);
@@ -41,7 +43,7 @@ export default function JoinFamilyScreen() {
 
   async function handleJoin() {
     if (!name.trim() || !inviteCode.trim()) {
-      Alert.alert("Missing info", "Enter your name and the invite code.");
+      Alert.alert(t("setup.missingInfo"), t("setup.enterNameAndInviteCode"));
       return;
     }
     setIsSubmitting(true);
@@ -51,7 +53,7 @@ export default function JoinFamilyScreen() {
     });
     setIsSubmitting(false);
     if (error) {
-      Alert.alert("Couldn't join family", error.message);
+      Alert.alert(t("setup.couldntJoinFamily"), error.message);
       return;
     }
     await Promise.all([refetch(), refetchMyFamilies()]);
@@ -65,17 +67,17 @@ export default function JoinFamilyScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {mode === "choose" ? "Join a New Family" : mode === "create" ? "Create Family" : "Join Family"}
+          {mode === "choose" ? t("setup.joinNewFamilyTitle") : mode === "create" ? t("setup.createFamilyTitle") : t("setup.joinFamilyTitle")}
         </Text>
         <View style={styles.headerSpacer} />
       </View>
 
       {mode === "choose" ? (
         <View style={styles.content}>
-          <Text style={styles.subtitle}>Create a new family group or join an existing one with an invite code.</Text>
-          <Button label="Create a family" onPress={() => setMode("create")} style={styles.button} />
+          <Text style={styles.subtitle}>{t("setup.joinChooseSubtitle")}</Text>
+          <Button label={t("setup.createAFamily")} onPress={() => setMode("create")} style={styles.button} />
           <Button
-            label="Join with an invite code"
+            label={t("setup.joinWithInviteCode")}
             variant="secondary"
             onPress={() => setMode("join")}
             style={styles.button}
@@ -83,17 +85,17 @@ export default function JoinFamilyScreen() {
         </View>
       ) : (
         <View style={styles.content}>
-          <TextField placeholder="Your name" value={name} onChangeText={setName} editable={!isSubmitting} />
+          <TextField placeholder={t("setup.yourNamePlaceholder")} value={name} onChangeText={setName} editable={!isSubmitting} />
           {mode === "create" ? (
             <TextField
-              placeholder="Family name (e.g. The Smiths)"
+              placeholder={t("setup.familyNamePlaceholder")}
               value={familyName}
               onChangeText={setFamilyName}
               editable={!isSubmitting}
             />
           ) : (
             <TextField
-              placeholder="Invite code"
+              placeholder={t("setup.inviteCodePlaceholder")}
               autoCapitalize="characters"
               value={inviteCode}
               onChangeText={setInviteCode}
@@ -101,7 +103,7 @@ export default function JoinFamilyScreen() {
             />
           )}
           <Button
-            label={mode === "create" ? "Create" : "Join"}
+            label={mode === "create" ? t("setup.create") : t("setup.join")}
             onPress={mode === "create" ? handleCreate : handleJoin}
             loading={isSubmitting}
             style={styles.button}

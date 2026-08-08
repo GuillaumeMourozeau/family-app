@@ -1,8 +1,9 @@
 import { StyleSheet, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { Chip } from "@/components/Chip";
 import { FieldLabel } from "@/components/FieldLabel";
 import { colors, spacing } from "@/lib/theme";
-import { eventReminderSummary, EVENT_REMINDER_OPTIONS } from "@/lib/reminders";
+import { eventReminderSummary, eventReminderLabel, EVENT_REMINDER_MINUTES } from "@/lib/reminders";
 
 type Props = {
   value: number[];
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export function EventReminderPicker({ value, onChange, tint }: Props) {
+  const { t } = useTranslation();
   function toggle(minutes: number) {
     const next = value.includes(minutes) ? value.filter((m) => m !== minutes) : [...value, minutes];
     onChange(next);
@@ -18,22 +20,22 @@ export function EventReminderPicker({ value, onChange, tint }: Props) {
 
   return (
     <View style={styles.container}>
-      <FieldLabel icon="alarm-outline" label="Reminders" />
+      <FieldLabel icon="alarm-outline" label={t("calendar.reminders")} />
       <View style={styles.chipRow}>
-        {EVENT_REMINDER_OPTIONS.map((option) => (
+        {EVENT_REMINDER_MINUTES.map((minutes) => (
           <Chip
-            key={option.minutes}
-            label={option.label}
-            selected={value.includes(option.minutes)}
-            onPress={() => toggle(option.minutes)}
+            key={minutes}
+            label={eventReminderLabel(minutes, t)}
+            selected={value.includes(minutes)}
+            onPress={() => toggle(minutes)}
             color={tint}
           />
         ))}
       </View>
       {value.length === 0 ? (
-        <Text style={styles.hint}>No reminder — tap one or more above to add one.</Text>
+        <Text style={styles.hint}>{t("calendar.noReminderHint")}</Text>
       ) : (
-        <Text style={styles.summary}>{eventReminderSummary(value)}</Text>
+        <Text style={styles.summary}>{eventReminderSummary(value, t)}</Text>
       )}
     </View>
   );

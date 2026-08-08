@@ -1,12 +1,14 @@
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
 import { ColorSwatchPicker } from "@/components/ColorSwatchPicker";
 import { getMemberColor } from "@/lib/memberColors";
 import { colors, radii, spacing } from "@/lib/theme";
 
 export default function TodoSettingsScreen() {
+  const { t } = useTranslation();
   const { members, updateMemberColor } = useFamilyMembers();
 
   return (
@@ -15,17 +17,17 @@ export default function TodoSettingsScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>To-Do Settings</Text>
+        <Text style={styles.headerTitle}>{t("todo.settingsTitle")}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionLabel}>Member colors</Text>
-        <Text style={styles.helperText}>Kept in sync with the Calendar tab.</Text>
+        <Text style={styles.sectionLabel}>{t("calendarSettings.memberColors")}</Text>
+        <Text style={styles.helperText}>{t("todo.memberColorsHelper")}</Text>
         <View style={styles.card}>
           {members.map((m, index) => (
             <View key={m.id} style={[styles.memberRow, index === members.length - 1 && styles.memberRowLast]}>
-              <Text style={styles.rowLabel}>{m.full_name ?? "Member"}</Text>
+              <Text style={styles.rowLabel}>{m.full_name ?? t("common.member")}</Text>
               <ColorSwatchPicker value={getMemberColor(m)} onChange={(color) => updateMemberColor(m.id, color)} />
             </View>
           ))}

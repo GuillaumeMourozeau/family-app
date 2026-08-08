@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useRecipes } from "@/hooks/useRecipes";
 import { RecipeForm, type RecipeFormValue } from "@/components/RecipeForm";
 import { AddIngredientsToGroceriesModal } from "@/components/AddIngredientsToGroceriesModal";
 import { colors, radii, sectionColors, spacing } from "@/lib/theme";
 
 export default function RecipeDetailScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === "new";
   const { recipes, addRecipe, updateRecipe, deleteRecipe } = useRecipes();
@@ -28,7 +30,7 @@ export default function RecipeDetailScreen() {
       );
       setIsSaving(false);
       if (error || !created) {
-        Alert.alert("Couldn't save recipe", error ?? "Something went wrong.");
+        Alert.alert(t("meals.couldntSaveRecipe"), error ?? t("common.somethingWentWrong"));
         return;
       }
       router.back();
@@ -41,10 +43,10 @@ export default function RecipeDetailScreen() {
 
   function handleDelete() {
     if (!recipe) return;
-    Alert.alert("Delete recipe?", "This can't be undone.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("meals.deleteRecipeTitle"), t("common.thisCantBeUndone"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: t("common.delete"),
         style: "destructive",
         onPress: () => {
           deleteRecipe(recipe.id);
@@ -61,11 +63,11 @@ export default function RecipeDetailScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Recipe</Text>
+          <Text style={styles.headerTitle}>{t("meals.recipe")}</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.center}>
-          <Text style={styles.emptyText}>Recipe not found</Text>
+          <Text style={styles.emptyText}>{t("meals.recipeNotFound")}</Text>
         </View>
       </View>
     );
@@ -77,7 +79,7 @@ export default function RecipeDetailScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{isNew ? "New Recipe" : "Edit Recipe"}</Text>
+        <Text style={styles.headerTitle}>{isNew ? t("meals.newRecipe") : t("meals.editRecipe")}</Text>
         {!isNew ? (
           <TouchableOpacity onPress={handleDelete}>
             <Ionicons name="trash-outline" size={22} color={colors.danger} />
@@ -99,7 +101,7 @@ export default function RecipeDetailScreen() {
                 }
               : undefined
           }
-          submitLabel="Save"
+          submitLabel={t("common.save")}
           isSaving={isSaving}
           onSubmit={handleSubmit}
         />
@@ -107,7 +109,7 @@ export default function RecipeDetailScreen() {
         {!isNew && (
           <TouchableOpacity style={styles.groceryButton} onPress={() => setIsAddingToGroceries(true)}>
             <Ionicons name="cart-outline" size={16} color={sectionColors.groceries} />
-            <Text style={styles.groceryButtonText}>Add ingredients to grocery list</Text>
+            <Text style={styles.groceryButtonText}>{t("meals.addIngredientsToGroceryList")}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import type { IngredientInput } from "@/hooks/useRecipes";
 import { RECIPE_CATEGORIES, type RecipeCategory } from "@/lib/recipeCategories";
 import { Button } from "@/components/Button";
@@ -24,6 +25,7 @@ type Props = {
 };
 
 export function RecipeForm({ initial, submitLabel, isSaving, onSubmit }: Props) {
+  const { t } = useTranslation();
   const [name, setName] = useState(initial?.name ?? "");
   const [details, setDetails] = useState(initial?.details ?? "");
   const [categories, setCategories] = useState<RecipeCategory[]>(initial?.categories ?? []);
@@ -42,15 +44,15 @@ export function RecipeForm({ initial, submitLabel, isSaving, onSubmit }: Props) 
 
   return (
     <View style={styles.container}>
-      <FieldLabel icon="restaurant-outline" label="Name" />
-      <TextField placeholder="Recipe name" value={name} onChangeText={setName} />
+      <FieldLabel icon="restaurant-outline" label={t("common.name")} />
+      <TextField placeholder={t("meals.recipeNamePlaceholder")} value={name} onChangeText={setName} />
 
-      <FieldLabel icon="pricetags-outline" label="Category (optional)" />
+      <FieldLabel icon="pricetags-outline" label={t("meals.categoryOptional")} />
       <View style={styles.chipRow}>
         {RECIPE_CATEGORIES.map((c) => (
           <Chip
             key={c.id}
-            label={c.label}
+            label={t(`common.recipeCategories.${c.id}`)}
             icon={c.icon}
             selected={categories.includes(c.id)}
             onPress={() => toggleCategory(c.id)}
@@ -59,12 +61,12 @@ export function RecipeForm({ initial, submitLabel, isSaving, onSubmit }: Props) 
         ))}
       </View>
 
-      <FieldLabel icon="list-outline" label="Ingredients" />
+      <FieldLabel icon="list-outline" label={t("meals.ingredients")} />
       <IngredientListEditor value={ingredients} onChange={setIngredients} tint={sectionColors.meals} />
 
-      <FieldLabel icon="document-text-outline" label="Details" />
+      <FieldLabel icon="document-text-outline" label={t("meals.details")} />
       <TextField
-        placeholder="Steps, notes, etc."
+        placeholder={t("meals.detailsPlaceholder")}
         value={details}
         onChangeText={setDetails}
         multiline

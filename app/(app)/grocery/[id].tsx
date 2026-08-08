@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useGroceries } from "@/hooks/useGroceries";
+import { displayPlaceName } from "@/lib/groceryPlaces";
 import { Chip } from "@/components/Chip";
 import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
@@ -10,6 +12,7 @@ import { FieldLabel } from "@/components/FieldLabel";
 import { colors, radii, sectionColors, spacing } from "@/lib/theme";
 
 export default function GroceryDetailScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { items, places, updateItem, removeFromList } = useGroceries();
 
@@ -41,10 +44,10 @@ export default function GroceryDetailScreen() {
 
   function handleDelete() {
     if (!item) return;
-    Alert.alert("Remove item?", "It'll come off your list, but you can still pick it from this place's history later.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("groceries.removeItemConfirmTitle"), t("groceries.removeItemConfirmMessage"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Remove",
+        text: t("common.remove"),
         style: "destructive",
         onPress: () => {
           removeFromList(item.id);
@@ -61,11 +64,11 @@ export default function GroceryDetailScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Item</Text>
+          <Text style={styles.headerTitle}>{t("groceries.item")}</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.center}>
-          <Text style={styles.emptyText}>Item not found</Text>
+          <Text style={styles.emptyText}>{t("groceries.itemNotFound")}</Text>
         </View>
       </View>
     );
@@ -77,22 +80,22 @@ export default function GroceryDetailScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Item</Text>
+        <Text style={styles.headerTitle}>{t("groceries.editItem")}</Text>
         <TouchableOpacity onPress={handleDelete}>
           <Ionicons name="trash-outline" size={22} color={colors.danger} />
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <FieldLabel icon="create-outline" label="Name" />
-        <TextField placeholder="Item name" value={name} onChangeText={setName} />
+        <FieldLabel icon="create-outline" label={t("groceries.name")} />
+        <TextField placeholder={t("groceries.itemNamePlaceholder")} value={name} onChangeText={setName} />
 
-        <FieldLabel icon="storefront-outline" label="Where" />
+        <FieldLabel icon="storefront-outline" label={t("groceries.where")} />
         <View style={styles.chipRow}>
           {places.map((p) => (
             <Chip
               key={p.id}
-              label={p.name}
+              label={displayPlaceName(p, t)}
               selected={categoryId === p.id}
               onPress={() => setCategoryId(p.id)}
               color={sectionColors.groceries}
@@ -100,16 +103,16 @@ export default function GroceryDetailScreen() {
           ))}
         </View>
 
-        <FieldLabel icon="document-text-outline" label="More details" />
+        <FieldLabel icon="document-text-outline" label={t("common.moreDetails")} />
         <TextField
-          placeholder="Quantity, brand, notes..."
+          placeholder={t("groceries.detailsPlaceholder")}
           value={details}
           onChangeText={setDetails}
           multiline
           style={styles.detailsInput}
         />
 
-        <Button label="Save" onPress={handleSave} loading={isSaving} style={styles.saveButton} />
+        <Button label={t("common.save")} onPress={handleSave} loading={isSaving} style={styles.saveButton} />
       </ScrollView>
     </View>
   );

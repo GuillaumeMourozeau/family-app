@@ -2,10 +2,11 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useMealPlan, type MealPlanEntry, type MealType } from "@/hooks/useMealPlan";
 import { useRecipes, type Recipe } from "@/hooks/useRecipes";
-import { startOfWeek } from "@/lib/dateUtils";
-import { MEAL_TYPES, MEAL_TYPE_ORDER, MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from "@/lib/mealTypes";
+import { formatDate, startOfWeek } from "@/lib/dateUtils";
+import { MEAL_TYPES, MEAL_TYPE_ORDER, MEAL_TYPE_ICONS } from "@/lib/mealTypes";
 import { TabScreenHeader } from "@/components/TabScreenHeader";
 import { BottomSheetModal } from "@/components/BottomSheetModal";
 import { ModalTitle } from "@/components/ModalTitle";
@@ -28,6 +29,7 @@ function toDateKey(date: Date): string {
 }
 
 export default function MealsScreen() {
+  const { t } = useTranslation();
   const { entries, isLoading, addMeal, deleteMeal } = useMealPlan();
   const { recipes, addRecipe } = useRecipes();
 
@@ -137,11 +139,11 @@ export default function MealsScreen() {
   return (
     <View style={styles.container}>
       <TabScreenHeader
-        title="Meals"
+        title={t("meals.tabTitle")}
         icon="restaurant"
         tint={sectionColors.meals}
         tintBackground={sectionTints.meals}
-        actionLabel="Recipes"
+        actionLabel={t("meals.recipesAction")}
         onAction={() => router.push("/recipes")}
       />
 
@@ -150,7 +152,7 @@ export default function MealsScreen() {
           <Text style={styles.navButtonText}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.weekLabel}>
-          Week of {weekStart.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+          {t("meals.weekOf", { date: formatDate(weekStart, { month: "short", day: "numeric" }) })}
         </Text>
         <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton}>
           <Text style={styles.navButtonText}>›</Text>
@@ -164,10 +166,10 @@ export default function MealsScreen() {
           return (
             <View key={dateKey} style={styles.dayCard}>
               <Text style={styles.dayHeading}>
-                {day.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+                {formatDate(day, { weekday: "long", month: "short", day: "numeric" })}
               </Text>
               {dayEntries.length === 0 ? (
-                <Text style={styles.emptyText}>No meals planned</Text>
+                <Text style={styles.emptyText}>{t("meals.noMealsPlanned")}</Text>
               ) : (
                 dayEntries.map((entry) => (
                   <View key={entry.id} style={styles.mealRow}>
@@ -177,8 +179,8 @@ export default function MealsScreen() {
                     <View style={styles.mealTextContainer}>
                       <Text style={styles.mealTitle}>{entry.title}</Text>
                       <Text style={styles.mealMeta}>
-                        {MEAL_TYPE_LABELS[entry.meal_type]}
-                        {entry.serves ? ` · Serves ${entry.serves}` : ""}
+                        {t(`common.mealTypes.${entry.meal_type}`)}
+                        {entry.serves ? t("meals.serves", { count: entry.serves }) : ""}
                       </Text>
                     </View>
                     <TouchableOpacity onPress={() => setAddingIngredientsForEntry(entry)} hitSlop={8}>
@@ -192,7 +194,7 @@ export default function MealsScreen() {
               )}
               <TouchableOpacity style={styles.addMealButton} onPress={() => openAddMeal(dateKey)}>
                 <Ionicons name="add-circle-outline" size={16} color={sectionColors.meals} />
-                <Text style={styles.addMealButtonText}>Add meal</Text>
+                <Text style={styles.addMealButtonText}>{t("meals.addMeal")}</Text>
               </TouchableOpacity>
             </View>
           );
@@ -200,26 +202,26 @@ export default function MealsScreen() {
       </ScrollView>
 
       <BottomSheetModal visible={!!addingForDate} onClose={() => setAddingForDate(null)}>
-        <ModalTitle icon="restaurant" tint={sectionColors.meals} tintBackground={sectionTints.meals} title="New meal" />
+        <ModalTitle icon="restaurant" tint={sectionColors.meals} tintBackground={sectionTints.meals} title={t("meals.newMeal")} />
 
-        <FieldLabel icon="time-outline" label="Meal type" />
+        <FieldLabel icon="time-outline" label={t("meals.mealType")} />
         <View style={styles.chipRow}>
-          {MEAL_TYPES.map((t) => (
+          {MEAL_TYPES.map((mt) => (
             <Chip
-              key={t}
-              label={MEAL_TYPE_LABELS[t]}
-              icon={MEAL_TYPE_ICONS[t]}
-              selected={mealType === t}
-              onPress={() => setMealType(t)}
+              key={mt}
+              label={t(`common.mealTypes.${mt}`)}
+              icon={MEAL_TYPE_ICONS[mt]}
+              selected={mealType === mt}
+              onPress={() => setMealType(mt)}
               color={sectionColors.meals}
             />
           ))}
         </View>
 
-        <FieldLabel icon="book-outline" label="Menu" />
+        <FieldLabel icon="book-outline" label={t("meals.menu")} />
         <View style={styles.chipRow}>
           <Chip
-            label="Quick menu"
+            label={t("meals.quickMenu")}
             selected={addMode === "quick"}
             onPress={() => {
               setAddMode("quick");
@@ -228,7 +230,7 @@ export default function MealsScreen() {
             color={sectionColors.meals}
           />
           <Chip
-            label="Existing recipe"
+            label={t("meals.existingRecipe")}
             selected={addMode === "existing"}
             onPress={() => {
               setAddMode("existing");
@@ -237,7 +239,7 @@ export default function MealsScreen() {
             color={sectionColors.meals}
           />
           <Chip
-            label="New recipe"
+            label={t("meals.newRecipeChip")}
             selected={addMode === "new"}
             onPress={() => {
               setAddMode("new");
@@ -248,50 +250,50 @@ export default function MealsScreen() {
         </View>
 
         {addMode === "quick" && (
-          <TextField placeholder="What's for dinner?" value={quickTitle} onChangeText={setQuickTitle} />
+          <TextField placeholder={t("meals.whatsForDinnerPlaceholder")} value={quickTitle} onChangeText={setQuickTitle} />
         )}
 
         {addMode === "existing" &&
           (selectedRecipe ? (
             <View style={styles.selectedRecipeRow}>
-              <Text style={styles.selectedRecipeText}>Selected: {selectedRecipe.name}</Text>
+              <Text style={styles.selectedRecipeText}>{t("meals.selected", { name: selectedRecipe.name })}</Text>
               <TouchableOpacity onPress={() => setIsPickingRecipe(true)}>
-                <Text style={styles.changeLink}>Change</Text>
+                <Text style={styles.changeLink}>{t("meals.change")}</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <TouchableOpacity style={styles.browseButton} onPress={() => setIsPickingRecipe(true)}>
               <Ionicons name="search-outline" size={16} color={sectionColors.meals} />
-              <Text style={styles.browseButtonText}>Browse recipes</Text>
+              <Text style={styles.browseButtonText}>{t("meals.browseRecipes")}</Text>
             </TouchableOpacity>
           ))}
 
         {addMode === "new" &&
           (selectedRecipe ? (
             <View style={styles.selectedRecipeRow}>
-              <Text style={styles.selectedRecipeText}>Created: {selectedRecipe.name}</Text>
+              <Text style={styles.selectedRecipeText}>{t("meals.created", { name: selectedRecipe.name })}</Text>
               <TouchableOpacity onPress={() => setIsCreatingRecipe(true)}>
-                <Text style={styles.changeLink}>Change</Text>
+                <Text style={styles.changeLink}>{t("meals.change")}</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <TouchableOpacity style={styles.browseButton} onPress={() => setIsCreatingRecipe(true)}>
               <Ionicons name="add-circle-outline" size={16} color={sectionColors.meals} />
-              <Text style={styles.browseButtonText}>Create a recipe</Text>
+              <Text style={styles.browseButtonText}>{t("meals.createARecipe")}</Text>
             </TouchableOpacity>
           ))}
 
-        <FieldLabel icon="people-outline" label="Serves (optional)" />
-        <TextField placeholder="e.g. 4" keyboardType="number-pad" value={serves} onChangeText={setServes} />
+        <FieldLabel icon="people-outline" label={t("meals.servesOptional")} />
+        <TextField placeholder={t("meals.servesPlaceholder")} keyboardType="number-pad" value={serves} onChangeText={setServes} />
 
-        <FieldLabel icon="document-text-outline" label="Notes (optional)" />
-        <TextField placeholder="Notes for this meal" value={mealDetails} onChangeText={setMealDetails} />
+        <FieldLabel icon="document-text-outline" label={t("meals.notesOptional")} />
+        <TextField placeholder={t("meals.notesPlaceholder")} value={mealDetails} onChangeText={setMealDetails} />
 
-        <Button label="Add meal" onPress={handleSubmitMeal} loading={isSaving} style={styles.submitButton} />
+        <Button label={t("meals.addMeal")} onPress={handleSubmitMeal} loading={isSaving} style={styles.submitButton} />
       </BottomSheetModal>
 
       <BottomSheetModal visible={isPickingRecipe} onClose={() => setIsPickingRecipe(false)}>
-        <ModalTitle icon="search" tint={sectionColors.meals} tintBackground={sectionTints.meals} title="Choose a recipe" />
+        <ModalTitle icon="search" tint={sectionColors.meals} tintBackground={sectionTints.meals} title={t("meals.chooseRecipe")} />
         <RecipeListView
           recipes={recipes}
           onSelectRecipe={(r) => {
@@ -302,8 +304,8 @@ export default function MealsScreen() {
       </BottomSheetModal>
 
       <BottomSheetModal visible={isCreatingRecipe} onClose={() => setIsCreatingRecipe(false)}>
-        <ModalTitle icon="add-circle" tint={sectionColors.meals} tintBackground={sectionTints.meals} title="New recipe" />
-        <RecipeForm submitLabel="Create recipe" isSaving={isCreatingRecipeSaving} onSubmit={handleCreateRecipe} />
+        <ModalTitle icon="add-circle" tint={sectionColors.meals} tintBackground={sectionTints.meals} title={t("meals.newRecipeTitle")} />
+        <RecipeForm submitLabel={t("meals.createRecipe")} isSaving={isCreatingRecipeSaving} onSubmit={handleCreateRecipe} />
       </BottomSheetModal>
 
       <AddIngredientsToGroceriesModal

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
 import { Button } from "@/components/Button";
@@ -9,6 +10,7 @@ import { colors, spacing } from "@/lib/theme";
 type Mode = "choose" | "create" | "join";
 
 export default function SetupScreen() {
+  const { t } = useTranslation();
   const { refetch } = useProfile();
   const [mode, setMode] = useState<Mode>("choose");
   const [name, setName] = useState("");
@@ -18,7 +20,7 @@ export default function SetupScreen() {
 
   async function handleCreate() {
     if (!name.trim() || !familyName.trim()) {
-      Alert.alert("Missing info", "Enter your name and a family name.");
+      Alert.alert(t("setup.missingInfo"), t("setup.enterNameAndFamilyName"));
       return;
     }
 
@@ -30,7 +32,7 @@ export default function SetupScreen() {
     setIsSubmitting(false);
 
     if (error) {
-      Alert.alert("Couldn't create family", error.message);
+      Alert.alert(t("setup.couldntCreateFamily"), error.message);
       return;
     }
 
@@ -39,7 +41,7 @@ export default function SetupScreen() {
 
   async function handleJoin() {
     if (!name.trim() || !inviteCode.trim()) {
-      Alert.alert("Missing info", "Enter your name and the invite code.");
+      Alert.alert(t("setup.missingInfo"), t("setup.enterNameAndInviteCode"));
       return;
     }
 
@@ -51,7 +53,7 @@ export default function SetupScreen() {
     setIsSubmitting(false);
 
     if (error) {
-      Alert.alert("Couldn't join family", error.message);
+      Alert.alert(t("setup.couldntJoinFamily"), error.message);
       return;
     }
 
@@ -62,28 +64,28 @@ export default function SetupScreen() {
     return (
       <View style={styles.container}>
         <Text style={styles.badge}>👋</Text>
-        <Text style={styles.title}>Welcome!</Text>
-        <Text style={styles.subtitle}>Create a new family group or join an existing one.</Text>
-        <Button label="Create a family" onPress={() => setMode("create")} />
-        <Button label="Join with an invite code" variant="secondary" onPress={() => setMode("join")} />
+        <Text style={styles.title}>{t("setup.welcome")}</Text>
+        <Text style={styles.subtitle}>{t("setup.chooseSubtitle")}</Text>
+        <Button label={t("setup.createAFamily")} onPress={() => setMode("create")} />
+        <Button label={t("setup.joinWithInviteCode")} variant="secondary" onPress={() => setMode("join")} />
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <Text style={styles.title}>{mode === "create" ? "Create your family" : "Join a family"}</Text>
-      <TextField placeholder="Your name" value={name} onChangeText={setName} editable={!isSubmitting} />
+      <Text style={styles.title}>{mode === "create" ? t("setup.createYourFamily") : t("setup.joinAFamily")}</Text>
+      <TextField placeholder={t("setup.yourNamePlaceholder")} value={name} onChangeText={setName} editable={!isSubmitting} />
       {mode === "create" ? (
         <TextField
-          placeholder="Family name (e.g. The Smiths)"
+          placeholder={t("setup.familyNamePlaceholder")}
           value={familyName}
           onChangeText={setFamilyName}
           editable={!isSubmitting}
         />
       ) : (
         <TextField
-          placeholder="Invite code"
+          placeholder={t("setup.inviteCodePlaceholder")}
           autoCapitalize="characters"
           value={inviteCode}
           onChangeText={setInviteCode}
@@ -91,12 +93,12 @@ export default function SetupScreen() {
         />
       )}
       <Button
-        label={mode === "create" ? "Create" : "Join"}
+        label={mode === "create" ? t("setup.create") : t("setup.join")}
         onPress={mode === "create" ? handleCreate : handleJoin}
         loading={isSubmitting}
       />
       <TouchableOpacity onPress={() => setMode("choose")} disabled={isSubmitting}>
-        <Text style={styles.linkText}>Back</Text>
+        <Text style={styles.linkText}>{t("common.back")}</Text>
       </TouchableOpacity>
     </KeyboardAvoidingView>
   );

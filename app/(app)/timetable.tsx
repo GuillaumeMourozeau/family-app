@@ -4,10 +4,11 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { PinchGestureHandler } from "react-native-gesture-handler";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useTranslation } from "react-i18next";
 import { useTimetable } from "@/hooks/useTimetable";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
 import { usePinchZoom } from "@/hooks/usePinchZoom";
-import { startOfWeek } from "@/lib/dateUtils";
+import { formatDate, startOfWeek } from "@/lib/dateUtils";
 import {
   expandTimetableWeek,
   timeStringToDate,
@@ -25,7 +26,6 @@ import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
 import { colors, radii, sectionColors, sectionTints, spacing } from "@/lib/theme";
 
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const GUTTER_WIDTH = 26;
 const DEFAULT_HOUR_HEIGHT = 52;
@@ -36,6 +36,8 @@ const DEFAULT_START_HOUR = 8;
 type WeekMode = "full" | "work";
 
 export default function TimetableScreen() {
+  const { t } = useTranslation();
+  const DAY_LABELS = t("common.weekdaysShort", { returnObjects: true }) as string[];
   const { blocks, overrides, addBlock, updateBlock, deleteBlock, setOverride, clearOverride } = useTimetable();
   const { members } = useFamilyMembers();
   const scrollRef = useRef<ScrollView>(null);
@@ -181,10 +183,10 @@ export default function TimetableScreen() {
     if (!editingOccurrence) return;
     const occ = editingOccurrence;
     if (editScope === "day") {
-      Alert.alert("Remove this day?", "Just this occurrence will be skipped; the weekly schedule stays.", [
-        { text: "Cancel", style: "cancel" },
+      Alert.alert(t("timetable.removeDayTitle"), t("timetable.removeDayMessage"), [
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Remove",
+          text: t("common.remove"),
           style: "destructive",
           onPress: async () => {
             await setOverride(occ.blockId, dateKeyOf(occ.date), { isCancelled: true });
@@ -193,10 +195,10 @@ export default function TimetableScreen() {
         },
       ]);
     } else {
-      Alert.alert("Delete whole schedule?", "This removes it from every week.", [
-        { text: "Cancel", style: "cancel" },
+      Alert.alert(t("timetable.deleteScheduleTitle"), t("timetable.deleteScheduleMessage"), [
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("common.delete"),
           style: "destructive",
           onPress: async () => {
             await deleteBlock(occ.blockId);
@@ -219,18 +221,18 @@ export default function TimetableScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Timetable</Text>
+        <Text style={styles.headerTitle}>{t("timetable.title")}</Text>
         <TouchableOpacity onPress={openAddBlock}>
           <Ionicons name="add-circle" size={26} color={sectionColors.calendar} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.filterRow}>
-        <Chip label="Everyone" selected={memberFilter === null} onPress={() => setMemberFilter(null)} color={NEUTRAL_COLOR} />
+        <Chip label={t("common.everyone")} selected={memberFilter === null} onPress={() => setMemberFilter(null)} color={NEUTRAL_COLOR} />
         {members.map((m) => (
           <Chip
             key={m.id}
-            label={m.full_name ?? "Member"}
+            label={m.full_name ?? t("common.member")}
             selected={memberFilter === m.id}
             onPress={() => setMemberFilter(m.id)}
             color={getMemberColor(m)}
@@ -243,7 +245,7 @@ export default function TimetableScreen() {
           <Text style={styles.navButtonText}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.navLabel}>
-          Week of {weekStart.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+          {t("timetable.weekOf", { date: formatDate(weekStart, { month: "short", day: "numeric" }) })}
         </Text>
         <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton}>
           <Text style={styles.navButtonText}>›</Text>
@@ -255,13 +257,13 @@ export default function TimetableScreen() {
           style={[styles.weekModeButton, weekMode === "full" && styles.weekModeButtonActive]}
           onPress={() => setWeekMode("full")}
         >
-          <Text style={[styles.weekModeText, weekMode === "full" && styles.weekModeTextActive]}>Full week</Text>
+          <Text style={[styles.weekModeText, weekMode === "full" && styles.weekModeTextActive]}>{t("calendar.fullWeek")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.weekModeButton, weekMode === "work" && styles.weekModeButtonActive]}
           onPress={() => setWeekMode("work")}
         >
-          <Text style={[styles.weekModeText, weekMode === "work" && styles.weekModeTextActive]}>Work week</Text>
+          <Text style={[styles.weekModeText, weekMode === "work" && styles.weekModeTextActive]}>{t("calendar.workWeek")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -327,7 +329,7 @@ export default function TimetableScreen() {
                         onPress={() => openEditOccurrence(occ)}
                       >
                         <Text style={styles.blockText} numberOfLines={1}>
-                          {member?.full_name ?? "Member"}
+                          {member?.full_name ?? t("common.member")}
                         </Text>
                         {occ.label ? (
                           <Text style={styles.blockSubtext} numberOfLines={1}>
@@ -345,14 +347,14 @@ export default function TimetableScreen() {
       </PinchGestureHandler>
 
       <BottomSheetModal visible={isAdding} onClose={() => setIsAdding(false)}>
-        <ModalTitle icon="time" tint={sectionColors.calendar} tintBackground={sectionTints.calendar} title="New timetable block" />
+        <ModalTitle icon="time" tint={sectionColors.calendar} tintBackground={sectionTints.calendar} title={t("timetable.newBlock")} />
 
-        <FieldLabel icon="person-outline" label="Member" />
+        <FieldLabel icon="person-outline" label={t("timetable.member")} />
         <View style={styles.chipRow}>
           {members.map((m) => (
             <Chip
               key={m.id}
-              label={m.full_name ?? "Member"}
+              label={m.full_name ?? t("common.member")}
               selected={newMemberId === m.id}
               onPress={() => setNewMemberId(m.id)}
               color={getMemberColor(m)}
@@ -360,7 +362,7 @@ export default function TimetableScreen() {
           ))}
         </View>
 
-        <FieldLabel icon="calendar-outline" label="Day" />
+        <FieldLabel icon="calendar-outline" label={t("timetable.day")} />
         <View style={styles.chipRow}>
           {DAY_LABELS.map((label, i) => (
             <Chip
@@ -406,19 +408,19 @@ export default function TimetableScreen() {
           />
         )}
 
-        <FieldLabel icon="pricetag-outline" label="Label (optional)" />
-        <TextField placeholder="e.g. Work, School" value={newLabel} onChangeText={setNewLabel} />
+        <FieldLabel icon="pricetag-outline" label={t("timetable.labelOptional")} />
+        <TextField placeholder={t("timetable.labelPlaceholder")} value={newLabel} onChangeText={setNewLabel} />
 
-        <Button label="Add" onPress={handleSaveNewBlock} style={[styles.submitButton, { backgroundColor: sectionColors.calendar }]} />
+        <Button label={t("common.add")} onPress={handleSaveNewBlock} style={[styles.submitButton, { backgroundColor: sectionColors.calendar }]} />
       </BottomSheetModal>
 
       <BottomSheetModal visible={!!editingOccurrence} onClose={() => setEditingOccurrence(null)}>
-        <ModalTitle icon="create-outline" tint={sectionColors.calendar} tintBackground={sectionTints.calendar} title="Edit block" />
+        <ModalTitle icon="create-outline" tint={sectionColors.calendar} tintBackground={sectionTints.calendar} title={t("timetable.editBlock")} />
 
-        <FieldLabel icon="git-branch-outline" label="Applies to" />
+        <FieldLabel icon="git-branch-outline" label={t("timetable.appliesTo")} />
         <View style={styles.chipRow}>
-          <Chip label="This day only" selected={editScope === "day"} onPress={() => setEditScope("day")} color={sectionColors.calendar} />
-          <Chip label="Every week" selected={editScope === "series"} onPress={() => setEditScope("series")} color={sectionColors.calendar} />
+          <Chip label={t("timetable.thisDayOnly")} selected={editScope === "day"} onPress={() => setEditScope("day")} color={sectionColors.calendar} />
+          <Chip label={t("timetable.everyWeek")} selected={editScope === "series"} onPress={() => setEditScope("series")} color={sectionColors.calendar} />
         </View>
 
         <View style={styles.dateRow}>
@@ -454,17 +456,17 @@ export default function TimetableScreen() {
           />
         )}
 
-        <FieldLabel icon="pricetag-outline" label="Label" />
-        <TextField placeholder="e.g. Work, School" value={editLabel} onChangeText={setEditLabel} />
+        <FieldLabel icon="pricetag-outline" label={t("timetable.label")} />
+        <TextField placeholder={t("timetable.labelPlaceholder")} value={editLabel} onChangeText={setEditLabel} />
 
-        <Button label="Save" onPress={handleSaveEdit} style={[styles.submitButton, { backgroundColor: sectionColors.calendar }]} />
+        <Button label={t("common.save")} onPress={handleSaveEdit} style={[styles.submitButton, { backgroundColor: sectionColors.calendar }]} />
         {editingOccurrence?.isOverridden && editScope === "day" && (
           <TouchableOpacity onPress={handleRevertOverride} style={styles.revertLink}>
-            <Text style={styles.revertLinkText}>Revert this day to the regular schedule</Text>
+            <Text style={styles.revertLinkText}>{t("timetable.revertDay")}</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity onPress={handleDeleteEdit} style={styles.deleteLinkRow}>
-          <Text style={styles.deleteLinkText}>{editScope === "day" ? "Remove just this day" : "Delete whole schedule"}</Text>
+          <Text style={styles.deleteLinkText}>{editScope === "day" ? t("timetable.removeThisDay") : t("timetable.deleteWholeSchedule")}</Text>
         </TouchableOpacity>
       </BottomSheetModal>
     </View>

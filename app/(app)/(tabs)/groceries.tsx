@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useGroceries, type GroceryItem, type GroceryPlace } from "@/hooks/useGroceries";
+import { displayPlaceName } from "@/lib/groceryPlaces";
 import { useProfile } from "@/hooks/useProfile";
 import { isNewItem } from "@/lib/newBadge";
 import { TabScreenHeader } from "@/components/TabScreenHeader";
@@ -15,6 +17,7 @@ import { TextField } from "@/components/TextField";
 import { colors, radii, sectionColors, sectionTints, spacing } from "@/lib/theme";
 
 export default function GroceriesScreen() {
+  const { t } = useTranslation();
   const {
     items,
     places,
@@ -75,7 +78,7 @@ export default function GroceriesScreen() {
     const result = await addItem(finalName, placeId);
     setIsSubmitting(false);
     if (result?.error) {
-      Alert.alert("Couldn't add item", result.error);
+      Alert.alert(t("groceries.couldntAddItem"), result.error);
       return;
     }
     setName("");
@@ -91,7 +94,7 @@ export default function GroceriesScreen() {
     const result = await addItem(finalName, addingPlace.id);
     setIsSubmitting(false);
     if (result?.error) {
-      Alert.alert("Couldn't add item", result.error);
+      Alert.alert(t("groceries.couldntAddItem"), result.error);
       return;
     }
     setPlaceItemName("");
@@ -109,7 +112,7 @@ export default function GroceriesScreen() {
 
   function openEditPlace(place: GroceryPlace) {
     setAddingPlace(null);
-    setEditPlaceName(place.name);
+    setEditPlaceName(displayPlaceName(place, t));
     setEditingPlace(place);
   }
 
@@ -117,7 +120,7 @@ export default function GroceriesScreen() {
     if (!editingPlace || !editPlaceName.trim()) return;
     const result = await renamePlace(editingPlace.id, editPlaceName.trim());
     if (result?.error) {
-      Alert.alert("Couldn't rename place", result.error);
+      Alert.alert(t("groceries.couldntRenamePlace"), result.error);
       return;
     }
     setEditingPlace(null);
@@ -129,23 +132,23 @@ export default function GroceriesScreen() {
       deleteItem(entry.id);
       return;
     }
-    Alert.alert(`Remove "${entry.name}"?`, "It's still on your list — this will remove it entirely.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: () => deleteItem(entry.id) },
+    Alert.alert(t("groceries.removeItemTitle", { name: entry.name }), t("groceries.removeItemMessage"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("common.remove"), style: "destructive", onPress: () => deleteItem(entry.id) },
     ]);
   }
 
   function handleDeletePlace() {
     if (!editingPlace) return;
-    Alert.alert("Delete this place?", "Items here will move to Anywhere.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("groceries.deletePlaceTitle"), t("groceries.deletePlaceMessage"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: t("common.delete"),
         style: "destructive",
         onPress: async () => {
           const result = await deletePlace(editingPlace.id);
           if (result?.error) {
-            Alert.alert("Couldn't delete place", result.error);
+            Alert.alert(t("groceries.couldntDeletePlace"), result.error);
             return;
           }
           setEditingPlace(null);
@@ -165,11 +168,11 @@ export default function GroceriesScreen() {
   return (
     <View style={styles.container}>
       <TabScreenHeader
-        title="Groceries"
+        title={t("groceries.tabTitle")}
         icon="cart"
         tint={sectionColors.groceries}
         tintBackground={sectionTints.groceries}
-        actionLabel="+ Add Item"
+        actionLabel={t("groceries.addItemAction")}
         onAction={openGlobalAdd}
       />
 
@@ -180,11 +183,11 @@ export default function GroceriesScreen() {
         ListFooterComponent={
           <View>
             <TouchableOpacity style={styles.addPlaceRow} onPress={() => setIsAddingPlace(true)}>
-              <Text style={styles.addPlaceText}>+ Add new place</Text>
+              <Text style={styles.addPlaceText}>{t("groceries.addNewPlace")}</Text>
             </TouchableOpacity>
             {hasChecked && (
               <TouchableOpacity style={styles.clearRow} onPress={clearChecked}>
-                <Text style={styles.clearLink}>Clear checked items</Text>
+                <Text style={styles.clearLink}>{t("groceries.clearCheckedItems")}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -195,15 +198,15 @@ export default function GroceriesScreen() {
             <View style={styles.section}>
               <View style={styles.placeHeader}>
                 <TouchableOpacity style={styles.placeHeaderMain} onPress={() => setAddingPlace(place)}>
-                  <Text style={styles.placeName}>{place.name}</Text>
-                  <Text style={styles.placeAddHint}>+ Add</Text>
+                  <Text style={styles.placeName}>{displayPlaceName(place, t)}</Text>
+                  <Text style={styles.placeAddHint}>{t("groceries.addHint")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => openEditPlace(place)} hitSlop={8} style={styles.editIcon}>
                   <Ionicons name="create-outline" size={20} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
               {rows.length === 0 ? (
-                <Text style={styles.emptyPlaceText}>Nothing here yet</Text>
+                <Text style={styles.emptyPlaceText}>{t("groceries.nothingHereYet")}</Text>
               ) : (
                 rows.map((item) => (
                   <ItemRow
@@ -219,7 +222,7 @@ export default function GroceriesScreen() {
         }}
         ListEmptyComponent={
           items.length === 0 ? (
-            <Text style={styles.emptyText}>List's empty. Tap a place below to add something.</Text>
+            <Text style={styles.emptyText}>{t("groceries.listEmpty")}</Text>
           ) : null
         }
       />
@@ -234,7 +237,7 @@ export default function GroceriesScreen() {
             icon="storefront-outline"
             tint={sectionColors.groceries}
             tintBackground={sectionTints.groceries}
-            title={`Add to ${addingPlace?.name ?? ""}`}
+            title={t("groceries.addTo", { place: addingPlace ? displayPlaceName(addingPlace, t) : "" })}
           />
           {addingPlace && (
             <TouchableOpacity onPress={() => openEditPlace(addingPlace)} hitSlop={8}>
@@ -243,14 +246,14 @@ export default function GroceriesScreen() {
           )}
         </View>
         <TextField
-          placeholder="Item name"
+          placeholder={t("groceries.itemNamePlaceholder")}
           value={placeItemName}
           onChangeText={setPlaceItemName}
           autoFocus
           onSubmitEditing={() => handleAddToPlace()}
         />
         <Button
-          label="Add item"
+          label={t("groceries.addItem")}
           onPress={() => handleAddToPlace()}
           loading={isSubmitting}
           style={[styles.submitButton, styles.sectionButton]}
@@ -258,7 +261,7 @@ export default function GroceriesScreen() {
 
         {addingPlace && getHistoryForPlace(addingPlace.id).length > 0 && (
           <>
-            <FieldLabel icon="time-outline" label="Previously added here" />
+            <FieldLabel icon="time-outline" label={t("groceries.previouslyAddedHere")} />
             <View style={styles.chipRow}>
               {getHistoryForPlace(addingPlace.id).map((entry) => (
                 <Chip
@@ -275,21 +278,21 @@ export default function GroceriesScreen() {
       </BottomSheetModal>
 
       <BottomSheetModal visible={isAdding} onClose={() => setIsAdding(false)}>
-        <ModalTitle icon="cart" tint={sectionColors.groceries} tintBackground={sectionTints.groceries} title="New item" />
+        <ModalTitle icon="cart" tint={sectionColors.groceries} tintBackground={sectionTints.groceries} title={t("groceries.newItem")} />
         <TextField
-          placeholder="Item name"
+          placeholder={t("groceries.itemNamePlaceholder")}
           value={name}
           onChangeText={setName}
           autoFocus
           onSubmitEditing={() => handleAddItem()}
         />
 
-        <FieldLabel icon="storefront-outline" label="Where" />
+        <FieldLabel icon="storefront-outline" label={t("groceries.where")} />
         <View style={styles.chipRow}>
           {places.map((p) => (
             <Chip
               key={p.id}
-              label={p.name}
+              label={displayPlaceName(p, t)}
               selected={placeId === p.id}
               onPress={() => setPlaceId(p.id)}
               color={sectionColors.groceries}
@@ -298,7 +301,7 @@ export default function GroceriesScreen() {
         </View>
 
         <Button
-          label="Add item"
+          label={t("groceries.addItem")}
           onPress={() => handleAddItem()}
           loading={isSubmitting}
           style={[styles.submitButton, styles.sectionButton]}
@@ -310,17 +313,17 @@ export default function GroceriesScreen() {
           icon="add-circle-outline"
           tint={sectionColors.groceries}
           tintBackground={sectionTints.groceries}
-          title="New place"
+          title={t("groceries.newPlace")}
         />
         <TextField
-          placeholder="Store name"
+          placeholder={t("groceries.storeNamePlaceholder")}
           value={newPlaceName}
           onChangeText={setNewPlaceName}
           autoFocus
           onSubmitEditing={handleCreatePlace}
         />
         <Button
-          label="Add place"
+          label={t("groceries.addPlace")}
           onPress={handleCreatePlace}
           loading={isSubmitting}
           style={[styles.submitButton, styles.sectionButton]}
@@ -336,22 +339,22 @@ export default function GroceriesScreen() {
           icon="create-outline"
           tint={sectionColors.groceries}
           tintBackground={sectionTints.groceries}
-          title="Edit place"
+          title={t("groceries.editPlace")}
         />
-        <TextField placeholder="Place name" value={editPlaceName} onChangeText={setEditPlaceName} />
+        <TextField placeholder={t("groceries.placeNamePlaceholder")} value={editPlaceName} onChangeText={setEditPlaceName} />
         <Button
-          label="Save name"
+          label={t("groceries.saveName")}
           onPress={handleSavePlaceName}
           style={[styles.submitButton, styles.sectionButton]}
         />
 
         {editingPlace && !editingPlace.is_default && (
-          <Button label="Delete place" variant="danger" onPress={handleDeletePlace} style={styles.submitButton} />
+          <Button label={t("groceries.deletePlace")} variant="danger" onPress={handleDeletePlace} style={styles.submitButton} />
         )}
 
         {editingPlace && getHistoryForPlace(editingPlace.id).length > 0 && (
           <>
-            <FieldLabel icon="time-outline" label="Previously added here" />
+            <FieldLabel icon="time-outline" label={t("groceries.previouslyAddedHere")} />
             {getHistoryForPlace(editingPlace.id).map((entry) => (
               <View key={entry.id} style={styles.historyRow}>
                 <Text style={styles.historyText}>{entry.name}</Text>
@@ -368,6 +371,7 @@ export default function GroceriesScreen() {
 }
 
 function ItemRow({ item, onToggle, onDelete }: { item: GroceryItem; onToggle: () => void; onDelete: () => void }) {
+  const { t } = useTranslation();
   const { profile } = useProfile();
   return (
     <View style={styles.row}>
@@ -381,7 +385,7 @@ function ItemRow({ item, onToggle, onDelete }: { item: GroceryItem; onToggle: ()
       <TouchableOpacity style={styles.rowMain} onPress={() => router.push(`/grocery/${item.id}`)}>
         <View style={styles.rowTitleLine}>
           <Text style={[styles.rowTitle, item.is_checked && styles.rowTitleDone]}>{item.name}</Text>
-          {isNewItem(item.created_at, item.created_by, profile) && <Text style={styles.newBadge}>New</Text>}
+          {isNewItem(item.created_at, item.created_by, profile) && <Text style={styles.newBadge}>{t("common.new")}</Text>}
         </View>
       </TouchableOpacity>
       <TouchableOpacity onPress={onDelete} hitSlop={8}>

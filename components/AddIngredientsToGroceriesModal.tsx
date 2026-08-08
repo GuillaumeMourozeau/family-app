@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useGroceries } from "@/hooks/useGroceries";
+import { displayPlaceName } from "@/lib/groceryPlaces";
 import type { IngredientInput } from "@/hooks/useRecipes";
 import { BottomSheetModal } from "@/components/BottomSheetModal";
 import { ModalTitle } from "@/components/ModalTitle";
@@ -18,6 +20,7 @@ type Props = {
 };
 
 export function AddIngredientsToGroceriesModal({ visible, onClose, ingredients }: Props) {
+  const { t } = useTranslation();
   const { places, defaultPlace, addItem } = useGroceries();
   const [checked, setChecked] = useState<Record<number, boolean>>({});
   const [placeId, setPlaceId] = useState<string | null>(null);
@@ -57,12 +60,12 @@ export function AddIngredientsToGroceriesModal({ visible, onClose, ingredients }
         icon="cart-outline"
         tint={sectionColors.groceries}
         tintBackground={sectionTints.groceries}
-        title="Add to grocery list"
+        title={t("groceries.addToGroceryList")}
       />
 
       {ingredients.length > 0 && (
         <>
-          <FieldLabel icon="list-outline" label="Ingredients — uncheck what you already have" />
+          <FieldLabel icon="list-outline" label={t("groceries.uncheckWhatYouHave")} />
           <View style={styles.checkList}>
             {ingredients.map((ing, i) => {
               const isChecked = checked[i] ?? true;
@@ -82,15 +85,15 @@ export function AddIngredientsToGroceriesModal({ visible, onClose, ingredients }
         </>
       )}
 
-      <FieldLabel icon="add-circle-outline" label={ingredients.length > 0 ? "Add more items" : "What do you need?"} />
+      <FieldLabel icon="add-circle-outline" label={ingredients.length > 0 ? t("groceries.addMoreItems") : t("groceries.whatDoYouNeed")} />
       <IngredientListEditor value={customRows} onChange={setCustomRows} tint={sectionColors.groceries} />
 
-      <FieldLabel icon="storefront-outline" label="Store" />
+      <FieldLabel icon="storefront-outline" label={t("groceries.store")} />
       <View style={styles.chipRow}>
         {places.map((p) => (
           <Chip
             key={p.id}
-            label={p.name}
+            label={displayPlaceName(p, t)}
             selected={placeId === p.id}
             onPress={() => setPlaceId(p.id)}
             color={sectionColors.groceries}
@@ -99,7 +102,7 @@ export function AddIngredientsToGroceriesModal({ visible, onClose, ingredients }
       </View>
 
       <Button
-        label="Add to list"
+        label={t("groceries.addToList")}
         onPress={handleAdd}
         loading={isSaving}
         style={[styles.submitButton, { backgroundColor: sectionColors.groceries }]}

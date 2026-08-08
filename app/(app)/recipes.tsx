@@ -1,11 +1,13 @@
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useRecipes } from "@/hooks/useRecipes";
 import { RecipeListView } from "@/components/RecipeListView";
 import { colors, sectionColors, spacing } from "@/lib/theme";
 
 export default function RecipesScreen() {
+  const { t } = useTranslation();
   const { recipes } = useRecipes();
 
   return (
@@ -14,7 +16,7 @@ export default function RecipesScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Recipes</Text>
+        <Text style={styles.headerTitle}>{t("meals.recipesTitle")}</Text>
         <TouchableOpacity onPress={() => router.push("/recipe/new")}>
           <Ionicons name="add-circle" size={26} color={sectionColors.meals} />
         </TouchableOpacity>

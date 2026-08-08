@@ -1,4 +1,5 @@
 import type { TimetableBlock, TimetableOverride } from "@/hooks/useTimetable";
+import { formatTime } from "@/lib/dateUtils";
 
 export type TimetableOccurrence = {
   key: string;
@@ -34,7 +35,7 @@ export function dateToTimeString(date: Date): string {
 }
 
 export function formatTimeLabel(time: string): string {
-  return timeStringToDate(time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return formatTime(timeStringToDate(time), { hour: "2-digit", minute: "2-digit" });
 }
 
 export function minutesFromMidnight(time: string): number {

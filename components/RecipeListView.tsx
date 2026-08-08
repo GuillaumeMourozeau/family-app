@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import type { Recipe } from "@/hooks/useRecipes";
-import { RECIPE_CATEGORIES, categoryIcon, categoryLabel, type RecipeCategory } from "@/lib/recipeCategories";
+import { RECIPE_CATEGORIES, categoryIcon, type RecipeCategory } from "@/lib/recipeCategories";
 import { Chip } from "@/components/Chip";
 import { colors, radii, sectionColors, spacing } from "@/lib/theme";
 
@@ -14,6 +15,7 @@ type Props = {
 const UNCATEGORIZED = "uncategorized";
 
 export function RecipeListView({ recipes, onSelectRecipe }: Props) {
+  const { t } = useTranslation();
   const [filter, setFilter] = useState<RecipeCategory | null>(null);
 
   const filtered = useMemo(
@@ -39,11 +41,11 @@ export function RecipeListView({ recipes, onSelectRecipe }: Props) {
   return (
     <View>
       <View style={styles.filterRow}>
-        <Chip label="All" selected={filter === null} onPress={() => setFilter(null)} color={sectionColors.meals} />
+        <Chip label={t("meals.all")} selected={filter === null} onPress={() => setFilter(null)} color={sectionColors.meals} />
         {RECIPE_CATEGORIES.map((c) => (
           <Chip
             key={c.id}
-            label={c.label}
+            label={t(`common.recipeCategories.${c.id}`)}
             icon={c.icon}
             selected={filter === c.id}
             onPress={() => setFilter(c.id)}
@@ -53,7 +55,7 @@ export function RecipeListView({ recipes, onSelectRecipe }: Props) {
       </View>
 
       {filtered.length === 0 ? (
-        <Text style={styles.emptyText}>No recipes yet.</Text>
+        <Text style={styles.emptyText}>{t("meals.noRecipesYet")}</Text>
       ) : (
         orderedGroupKeys.map((key) => (
           <View key={key} style={styles.group}>
@@ -64,16 +66,14 @@ export function RecipeListView({ recipes, onSelectRecipe }: Props) {
                 color={sectionColors.meals}
               />
               <Text style={styles.groupHeaderText}>
-                {key === UNCATEGORIZED ? "Uncategorized" : categoryLabel(key as RecipeCategory)}
+                {key === UNCATEGORIZED ? t("meals.uncategorized") : t(`common.recipeCategories.${key}`)}
               </Text>
             </View>
             {(grouped.get(key) ?? []).map((r) => (
               <TouchableOpacity key={r.id} style={styles.row} onPress={() => onSelectRecipe(r)}>
                 <View style={styles.rowTextContainer}>
                   <Text style={styles.rowTitle}>{r.name}</Text>
-                  <Text style={styles.rowMeta}>
-                    {r.ingredients.length} ingredient{r.ingredients.length === 1 ? "" : "s"}
-                  </Text>
+                  <Text style={styles.rowMeta}>{t("meals.ingredientCount", { count: r.ingredients.length })}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
               </TouchableOpacity>

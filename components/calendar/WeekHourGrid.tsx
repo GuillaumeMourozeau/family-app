@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { PinchGestureHandler } from "react-native-gesture-handler";
+import { useTranslation } from "react-i18next";
 import type { Occurrence } from "@/lib/recurrence";
 import type { CalendarEvent } from "@/hooks/useEvents";
 import type { FamilyMember } from "@/hooks/useFamilyMembers";
 import type { HolidayMarker } from "@/lib/holidayMarkers";
 import { getEventDotColors } from "@/lib/memberColors";
-import { isToday } from "@/lib/dateUtils";
+import { formatDate, isToday } from "@/lib/dateUtils";
 import { usePinchZoom } from "@/hooks/usePinchZoom";
 import { colors, radii, sectionColors, spacing } from "@/lib/theme";
 
@@ -15,7 +16,6 @@ const DEFAULT_HOUR_HEIGHT = 56;
 const MIN_HOUR_HEIGHT = 30;
 const MAX_HOUR_HEIGHT = 110;
 const GUTTER_WIDTH = 26;
-const DAY_INITIALS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 type WeekMode = "full" | "work";
@@ -29,6 +29,8 @@ type Props = {
 };
 
 export function WeekHourGrid({ weekStart, occurrences, members, holidays, onNavigate }: Props) {
+  const { t } = useTranslation();
+  const dayInitials = t("common.weekdaysShort", { returnObjects: true }) as string[];
   const scrollRef = useRef<ScrollView>(null);
   const [weekMode, setWeekMode] = useState<WeekMode>("full");
   const { value: hourHeight, onGestureEvent, onHandlerStateChange } = usePinchZoom(
@@ -67,7 +69,7 @@ export function WeekHourGrid({ weekStart, occurrences, members, holidays, onNavi
 
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
-  const headerLabel = `${weekStart.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${weekEnd.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+  const headerLabel = `${formatDate(weekStart, { month: "short", day: "numeric" })} – ${formatDate(weekEnd, { month: "short", day: "numeric" })}`;
 
   const allDayOccurrences = occurrences.filter((occ) => occ.event.all_day);
   const timedOccurrences = occurrences.filter((occ) => !occ.event.all_day);
@@ -95,13 +97,13 @@ export function WeekHourGrid({ weekStart, occurrences, members, holidays, onNavi
           style={[styles.weekModeButton, weekMode === "full" && styles.weekModeButtonActive]}
           onPress={() => setWeekMode("full")}
         >
-          <Text style={[styles.weekModeText, weekMode === "full" && styles.weekModeTextActive]}>Full week</Text>
+          <Text style={[styles.weekModeText, weekMode === "full" && styles.weekModeTextActive]}>{t("calendar.fullWeek")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.weekModeButton, weekMode === "work" && styles.weekModeButtonActive]}
           onPress={() => setWeekMode("work")}
         >
-          <Text style={[styles.weekModeText, weekMode === "work" && styles.weekModeTextActive]}>Work week</Text>
+          <Text style={[styles.weekModeText, weekMode === "work" && styles.weekModeTextActive]}>{t("calendar.workWeek")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -116,7 +118,7 @@ export function WeekHourGrid({ weekStart, occurrences, members, holidays, onNavi
           );
           return (
             <View key={i} style={styles.dayHeaderCell}>
-              <Text style={styles.dayHeaderInitial}>{DAY_INITIALS[i]}</Text>
+              <Text style={styles.dayHeaderInitial}>{dayInitials[i]}</Text>
               <View
                 style={[
                   styles.dayHeaderCircle,

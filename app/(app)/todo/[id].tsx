@@ -2,37 +2,24 @@ import { useEffect, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { useTranslation } from "react-i18next";
 import { useTodos, type TodoPriority } from "@/hooks/useTodos";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
 import { useProfile } from "@/hooks/useProfile";
 import { getMemberColor, NEUTRAL_COLOR } from "@/lib/memberColors";
+import { toDateKey, dateKeyToDate, formatDate } from "@/lib/dateUtils";
 import type { TodoReminder } from "@/lib/reminders";
 import { Chip } from "@/components/Chip";
 import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
 import { FieldLabel } from "@/components/FieldLabel";
 import { TodoReminderPicker } from "@/components/TodoReminderPicker";
+import { TodoCategoryPicker } from "@/components/TodoCategoryPicker";
 import { colors, radii, sectionColors, spacing } from "@/lib/theme";
 
-const PRIORITY_LABELS: Record<TodoPriority, string> = {
-  urgent: "Urgent",
-  soon: "Better sooner",
-  whenever: "Whenever",
-};
-
-const PRIORITY_COLORS: Record<TodoPriority, string> = {
-  urgent: colors.danger,
-  soon: colors.gold,
-  whenever: colors.textFaint,
-};
-
-const PRIORITY_ICONS: Record<TodoPriority, keyof typeof Ionicons.glyphMap> = {
-  urgent: "alert-circle",
-  soon: "time",
-  whenever: "ellipse-outline",
-};
-
 export default function TodoDetailScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { todos, updateTodo, deleteTodo, toggleTodo } = useTodos();
   const { members } = useFamilyMembers();
@@ -45,9 +32,12 @@ export default function TodoDetailScreen() {
   const [title, setTitle] = useState("");
   const [assignedTo, setAssignedTo] = useState<string | null>(null);
   const [priority, setPriority] = useState<TodoPriority>("whenever");
+  const [categoryId, setCategoryId] = useState<string | null>(null);
   const [details, setDetails] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [reminder, setReminder] = useState<TodoReminder | null>(null);
+  const [dueDate, setDueDate] = useState<Date | null>(null);
+  const [showDueDatePicker, setShowDueDatePicker] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -55,8 +45,10 @@ export default function TodoDetailScreen() {
     setTitle(todo.title);
     setAssignedTo(todo.assigned_to);
     setPriority(todo.priority);
+    setCategoryId(todo.category_id);
     setDetails(todo.description ?? "");
     setIsPrivate(todo.is_private);
+    setDueDate(todo.due_date ? dateKeyToDate(todo.due_date) : null);
     setReminder(
       todo.reminder_enabled && todo.reminder_freq && todo.reminder_time
         ? { freq: todo.reminder_freq, time: todo.reminder_time, weekday: todo.reminder_weekday }
@@ -71,6 +63,8 @@ export default function TodoDetailScreen() {
       title: title.trim(),
       assignedTo,
       priority,
+      categoryId,
+      dueDate: dueDate ? toDateKey(dueDate) : null,
       description: details.trim() || null,
       isPrivate,
       reminder,
@@ -81,10 +75,10 @@ export default function TodoDetailScreen() {
 
   function handleDelete() {
     if (!todo) return;
-    Alert.alert("Delete task?", "This can't be undone.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("todo.deleteTaskTitle"), t("common.thisCantBeUndone"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: t("common.delete"),
         style: "destructive",
         onPress: () => {
           deleteTodo(todo.id);
@@ -101,11 +95,11 @@ export default function TodoDetailScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Task</Text>
+          <Text style={styles.headerTitle}>{t("todo.task")}</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.center}>
-          <Text style={styles.emptyText}>Task not found</Text>
+          <Text style={styles.emptyText}>{t("todo.taskNotFound")}</Text>
         </View>
       </View>
     );
@@ -117,7 +111,7 @@ export default function TodoDetailScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Task</Text>
+        <Text style={styles.headerTitle}>{t("todo.editTask")}</Text>
         <TouchableOpacity onPress={handleDelete}>
           <Ionicons name="trash-outline" size={22} color={colors.danger} />
         </TouchableOpacity>
@@ -134,35 +128,32 @@ export default function TodoDetailScreen() {
             color={todo.is_complete ? colors.textMuted : colors.white}
           />
           <Text style={[styles.markDoneText, todo.is_complete && styles.markDoneTextDone]}>
-            {todo.is_complete ? "Mark as Not Done" : "Mark as Done"}
+            {todo.is_complete ? t("todo.markAsNotDone") : t("todo.markAsDone")}
           </Text>
         </TouchableOpacity>
 
-        <FieldLabel icon="create-outline" label="Title" />
-        <TextField placeholder="Task title" value={title} onChangeText={setTitle} />
-        <Text style={styles.creatorText}>Added by {isCreator ? "you" : creator?.full_name ?? "a family member"}</Text>
+        <FieldLabel icon="create-outline" label={t("common.title")} />
+        <TextField placeholder={t("todo.taskTitlePlaceholder")} value={title} onChangeText={setTitle} />
+        <Text style={styles.creatorText}>
+          {t("common.addedBy", { name: isCreator ? t("common.you") : creator?.full_name ?? t("common.aFamilyMember") })}
+        </Text>
 
-        <FieldLabel icon="flag-outline" label="Priority" />
-        <View style={styles.chipRow}>
-          {(["urgent", "soon", "whenever"] as TodoPriority[]).map((p) => (
-            <Chip
-              key={p}
-              label={PRIORITY_LABELS[p]}
-              icon={PRIORITY_ICONS[p]}
-              selected={priority === p}
-              onPress={() => setPriority(p)}
-              color={PRIORITY_COLORS[p]}
-            />
-          ))}
-        </View>
+        <FieldLabel icon="flag-outline" label={t("todo.category")} />
+        <TodoCategoryPicker
+          value={{ priority, categoryId }}
+          onChange={(next) => {
+            setPriority(next.priority);
+            setCategoryId(next.categoryId);
+          }}
+        />
 
-        <FieldLabel icon="people-outline" label="Assign to" />
+        <FieldLabel icon="people-outline" label={t("common.assignTo")} />
         <View style={styles.chipRow}>
-          <Chip label="Unassigned" selected={assignedTo === null} onPress={() => setAssignedTo(null)} color={NEUTRAL_COLOR} />
+          <Chip label={t("common.unassigned")} selected={assignedTo === null} onPress={() => setAssignedTo(null)} color={NEUTRAL_COLOR} />
           {members.map((m) => (
             <Chip
               key={m.id}
-              label={m.full_name ?? "Member"}
+              label={m.full_name ?? t("common.member")}
               selected={assignedTo === m.id}
               onPress={() => setAssignedTo(m.id)}
               color={getMemberColor(m)}
@@ -172,7 +163,7 @@ export default function TodoDetailScreen() {
 
         {isCreator && (
           <View style={styles.switchRow}>
-            <FieldLabel icon="lock-closed-outline" label="Keep it private" />
+            <FieldLabel icon="lock-closed-outline" label={t("common.keepItPrivate")} />
             <Switch
               value={isPrivate}
               onValueChange={setIsPrivate}
@@ -181,18 +172,42 @@ export default function TodoDetailScreen() {
           </View>
         )}
 
+        <FieldLabel icon="calendar-outline" label={t("todo.dueDateOptional")} />
+        <View style={styles.dueDateRow}>
+          <TouchableOpacity style={styles.dueDateButton} onPress={() => setShowDueDatePicker(true)}>
+            <Ionicons name="calendar-outline" size={15} color={sectionColors.todo} />
+            <Text style={styles.dueDateButtonText}>{dueDate ? formatDate(dueDate) : t("todo.addDueDate")}</Text>
+          </TouchableOpacity>
+          {dueDate && (
+            <TouchableOpacity onPress={() => setDueDate(null)} hitSlop={8}>
+              <Ionicons name="close-circle" size={20} color={colors.textFaint} />
+            </TouchableOpacity>
+          )}
+        </View>
+        {showDueDatePicker && (
+          <DateTimePicker
+            value={dueDate ?? new Date()}
+            mode="date"
+            display="default"
+            onChange={(_, selected) => {
+              setShowDueDatePicker(false);
+              if (selected) setDueDate(selected);
+            }}
+          />
+        )}
+
         <TodoReminderPicker value={reminder} onChange={setReminder} tint={sectionColors.todo} />
 
-        <FieldLabel icon="document-text-outline" label="More details" />
+        <FieldLabel icon="document-text-outline" label={t("common.moreDetails")} />
         <TextField
-          placeholder="Notes, sub-steps, etc."
+          placeholder={t("todo.detailsPlaceholder")}
           value={details}
           onChangeText={setDetails}
           multiline
           style={styles.detailsInput}
         />
 
-        <Button label="Save" onPress={handleSave} loading={isSaving} style={styles.saveButton} />
+        <Button label={t("common.save")} onPress={handleSave} loading={isSaving} style={styles.saveButton} />
       </ScrollView>
     </View>
   );
@@ -217,6 +232,19 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.xs },
   detailsInput: { minHeight: 90, textAlignVertical: "top" },
+  dueDateRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  dueDateButton: {
+    flex: 1,
+    flexDirection: "row",
+    gap: spacing.xs,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    padding: spacing.md,
+  },
+  dueDateButtonText: { fontSize: 15, fontWeight: "600", color: colors.text },
   saveButton: { marginTop: spacing.lg, backgroundColor: sectionColors.todo },
   emptyText: { color: colors.textMuted },
   markDoneButton: {
