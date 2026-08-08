@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -105,7 +105,12 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <LinearGradient colors={gradients.primary} style={styles.banner} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
         <View style={styles.topRow}>
-          <Text style={styles.familyName}>{family?.name ?? t("home.yourFamily")}</Text>
+          <View style={styles.familyNameRow}>
+            <Image source={require("@/assets/icon.png")} style={styles.logo} />
+            <Text style={styles.familyName} numberOfLines={1}>
+              {family?.name ?? t("home.yourFamily")}
+            </Text>
+          </View>
           <TouchableOpacity style={styles.settingsButton} onPress={() => router.push("/settings")}>
             <Ionicons name="settings-outline" size={20} color={colors.white} />
           </TouchableOpacity>
@@ -356,7 +361,9 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: radii.xxl + 6,
   },
   topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  familyName: { fontSize: 26, fontWeight: "800", color: colors.white },
+  familyNameRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1, marginRight: spacing.sm },
+  logo: { width: 38, height: 38, borderRadius: 12 },
+  familyName: { flexShrink: 1, fontSize: 26, fontWeight: "800", color: colors.white },
   settingsButton: {
     width: 40,
     height: 40,

@@ -280,7 +280,7 @@ export default {
     joinNewFamily: "Rejoindre une nouvelle famille",
     inviteCode: "Code d'invitation",
     shareInviteCode: "Partager le code d'invitation",
-    shareInviteMessage: 'Rejoignez notre famille sur Family App ! Utilisez le code {{code}} pour rejoindre « {{name}} ».',
+    shareInviteMessage: 'Rejoignez notre famille sur Fam Boss ! Utilisez le code {{code}} pour rejoindre « {{name}} ».',
     familyMembers: "Membres de la famille",
     you: " (vous)",
     admin: "Admin",

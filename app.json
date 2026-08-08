@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Family App",
+    "name": "Fam Boss",
     "slug": "family-app",
     "owner": "guillaumemourozeaus-team",
     "scheme": "familyapp",
@@ -24,10 +24,8 @@
       "package": "com.guillaumemourozeau.familyapp",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#FDEEDC",
+        "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false
     },
