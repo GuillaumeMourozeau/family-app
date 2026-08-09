@@ -9,6 +9,7 @@ import { useTimetable } from "@/hooks/useTimetable";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
 import { usePinchZoom } from "@/hooks/usePinchZoom";
 import { formatDate, startOfWeek } from "@/lib/dateUtils";
+import { weekdaysShortMonFirst } from "@/lib/weekdayLabels";
 import {
   expandTimetableWeek,
   timeStringToDate,
@@ -37,7 +38,7 @@ type WeekMode = "full" | "work";
 
 export default function TimetableScreen() {
   const { t } = useTranslation();
-  const DAY_LABELS = t("common.weekdaysShort", { returnObjects: true }) as string[];
+  const DAY_LABELS = weekdaysShortMonFirst();
   const { blocks, overrides, addBlock, updateBlock, deleteBlock, setOverride, clearOverride } = useTimetable();
   const { members } = useFamilyMembers();
   const scrollRef = useRef<ScrollView>(null);

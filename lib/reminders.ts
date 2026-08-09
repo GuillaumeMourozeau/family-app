@@ -1,4 +1,5 @@
 import { formatTime } from "@/lib/dateUtils";
+import { weekdaysVeryShortSunFirst } from "@/lib/weekdayLabels";
 
 type TFunction = (key: string, options?: Record<string, unknown>) => string;
 
@@ -40,7 +41,7 @@ export function todoReminderSummary(reminder: TodoReminder | null, t: TFunction)
   if (!reminder) return t("todo.noReminder");
   const time = formatReminderTime(reminder.time);
   if (reminder.freq === "daily") return t("todo.reminderEveryDayAt", { time });
-  const weekdayLabels = t("common.weekdaysVeryShort", { returnObjects: true }) as unknown as string[];
+  const weekdayLabels = weekdaysVeryShortSunFirst();
   const day = weekdayLabels[reminder.weekday ?? 0];
   return t("todo.reminderEveryWeekdayAt", { day, time });
 }

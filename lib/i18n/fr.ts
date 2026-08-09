@@ -31,7 +31,6 @@ export default {
     wholeFamily: "Toute la famille",
     forWho: "Pour qui",
     name: "Nom",
-    weekdaysShort: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"],
     mealTypes: {
       breakfast: "Petit-déjeuner",
       lunch: "Déjeuner",
@@ -124,9 +123,6 @@ export default {
     untilDate: " jusqu'au {{date}}",
     timesCount_one: ", {{count}} fois",
     timesCount_other: ", {{count}} fois",
-    weekdaysVeryShort: ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"],
-    weekdaysInitial: ["D", "L", "M", "M", "J", "V", "S"],
-    weekdaysInitialMonFirst: ["L", "M", "M", "J", "V", "S", "D"],
     unitDaily_one: "jour",
     unitDaily_other: "jours",
     unitWeekly_one: "semaine",

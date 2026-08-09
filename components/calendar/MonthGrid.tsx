@@ -6,6 +6,7 @@ import type { FamilyMember } from "@/hooks/useFamilyMembers";
 import type { HolidayMarker } from "@/lib/holidayMarkers";
 import { getEventDotColors } from "@/lib/memberColors";
 import { formatDate, isToday, startOfWeek } from "@/lib/dateUtils";
+import { weekdaysInitialMonFirst } from "@/lib/weekdayLabels";
 import { colors, radii, sectionColors, spacing } from "@/lib/theme";
 
 type Props = {
@@ -19,8 +20,8 @@ type Props = {
 };
 
 export function MonthGrid({ monthAnchor, selectedDay, occurrences, members, holidays, onSelectDay, onNavigate }: Props) {
-  const { t } = useTranslation();
-  const dayInitials = t("common.weekdaysInitialMonFirst", { returnObjects: true }) as unknown as string[];
+  const { i18n } = useTranslation();
+  const dayInitials = weekdaysInitialMonFirst();
   const monthStart = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(), 1);
   const monthEnd = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0);
   const gridStart = startOfWeek(monthStart);

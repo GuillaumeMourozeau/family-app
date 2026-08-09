@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Chip } from "@/components/Chip";
 import { TextField } from "@/components/TextField";
 import { formatDate } from "@/lib/dateUtils";
+import { weekdaysInitialSunFirst } from "@/lib/weekdayLabels";
 import { colors, radii, spacing } from "@/lib/theme";
 import { recurrenceSummary, type RecurrenceEndType, type RecurrenceFreq, type RecurrenceRule } from "@/lib/recurrence";
 
@@ -32,7 +33,7 @@ type Props = {
 
 export function RecurrencePicker({ value, onChange, tint }: Props) {
   const { t } = useTranslation();
-  const dayLabels = t("calendar.weekdaysInitial", { returnObjects: true }) as string[];
+  const dayLabels = weekdaysInitialSunFirst();
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
   function setFreq(freq: RecurrenceFreq) {

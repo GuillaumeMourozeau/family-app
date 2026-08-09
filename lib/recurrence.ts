@@ -1,4 +1,5 @@
 import { formatDate } from "@/lib/dateUtils";
+import { weekdaysVeryShortSunFirst } from "@/lib/weekdayLabels";
 
 export type RecurrenceFreq = "daily" | "weekly" | "monthly" | "yearly";
 export type RecurrenceEndType = "never" | "on_date" | "after_count";
@@ -148,7 +149,7 @@ export function recurrenceSummary(
   ];
   const every = t(`calendar.${everyKey}`, { count: rule.interval });
 
-  const dayLabels = t("calendar.weekdaysVeryShort", { returnObjects: true }) as unknown as string[];
+  const dayLabels = weekdaysVeryShortSunFirst();
   const days =
     rule.freq === "weekly" && rule.daysOfWeek && rule.daysOfWeek.length > 0
       ? t("calendar.onDays", {

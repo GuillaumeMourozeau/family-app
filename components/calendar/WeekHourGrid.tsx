@@ -9,6 +9,7 @@ import type { FamilyMember } from "@/hooks/useFamilyMembers";
 import type { HolidayMarker } from "@/lib/holidayMarkers";
 import { getEventDotColors } from "@/lib/memberColors";
 import { formatDate, isToday } from "@/lib/dateUtils";
+import { weekdaysShortMonFirst } from "@/lib/weekdayLabels";
 import { usePinchZoom } from "@/hooks/usePinchZoom";
 import { colors, radii, sectionColors, spacing } from "@/lib/theme";
 
@@ -30,7 +31,7 @@ type Props = {
 
 export function WeekHourGrid({ weekStart, occurrences, members, holidays, onNavigate }: Props) {
   const { t } = useTranslation();
-  const dayInitials = t("common.weekdaysShort", { returnObjects: true }) as string[];
+  const dayInitials = weekdaysShortMonFirst();
   const scrollRef = useRef<ScrollView>(null);
   const [weekMode, setWeekMode] = useState<WeekMode>("full");
   const { value: hourHeight, onGestureEvent, onHandlerStateChange } = usePinchZoom(

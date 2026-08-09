@@ -7,6 +7,7 @@ import { Chip } from "@/components/Chip";
 import { FieldLabel } from "@/components/FieldLabel";
 import { colors, spacing } from "@/lib/theme";
 import { todoReminderSummary, type TodoReminder, type TodoReminderFreq } from "@/lib/reminders";
+import { weekdaysVeryShortSunFirst } from "@/lib/weekdayLabels";
 
 const DEFAULT_REMINDER: TodoReminder = { freq: "daily", time: "09:00", weekday: new Date().getDay() };
 
@@ -29,7 +30,7 @@ type Props = {
 
 export function TodoReminderPicker({ value, onChange, tint }: Props) {
   const { t } = useTranslation();
-  const weekdayLabels = t("common.weekdaysVeryShort", { returnObjects: true }) as unknown as string[];
+  const weekdayLabels = weekdaysVeryShortSunFirst();
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   function setFreq(freq: TodoReminderFreq) {
