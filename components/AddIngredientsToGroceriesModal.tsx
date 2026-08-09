@@ -17,9 +17,10 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   ingredients: { quantity: string | null; name: string }[];
+  sourceMealEntryId?: string | null;
 };
 
-export function AddIngredientsToGroceriesModal({ visible, onClose, ingredients }: Props) {
+export function AddIngredientsToGroceriesModal({ visible, onClose, ingredients, sourceMealEntryId = null }: Props) {
   const { t } = useTranslation();
   const { places, defaultPlace, addItem } = useGroceries();
   const [checked, setChecked] = useState<Record<number, boolean>>({});
@@ -43,12 +44,12 @@ export function AddIngredientsToGroceriesModal({ visible, onClose, ingredients }
     for (let i = 0; i < ingredients.length; i++) {
       if (!checked[i]) continue;
       const label = [ingredients[i].quantity, ingredients[i].name].filter(Boolean).join(" ");
-      await addItem(label, placeId);
+      await addItem(label, placeId, sourceMealEntryId);
     }
     for (const row of customRows) {
       if (!row.name.trim()) continue;
       const label = [row.quantity, row.name].filter(Boolean).join(" ");
-      await addItem(label, placeId);
+      await addItem(label, placeId, sourceMealEntryId);
     }
     setIsSaving(false);
     onClose();

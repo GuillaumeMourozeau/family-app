@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import type { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
 
@@ -6,6 +7,7 @@ export type GroceryPlace = {
   id: string;
   name: string;
   is_default: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
 };
 
 export type GroceryItem = {
@@ -15,6 +17,7 @@ export type GroceryItem = {
   is_checked: boolean;
   is_archived: boolean;
   category_id: string | null;
+  source_meal_entry_id: string | null;
   created_at: string;
   created_by: string;
 };
@@ -112,6 +115,12 @@ export function useGroceries() {
     return data;
   }
 
+  async function updatePlaceIcon(id: string, icon: keyof typeof Ionicons.glyphMap) {
+    setPlaces((prev) => prev.map((p) => (p.id === id ? { ...p, icon } : p)));
+    const { error } = await supabase.from("grocery_categories").update({ icon }).eq("id", id);
+    if (error) refetch();
+  }
+
   async function renamePlace(id: string, name: string) {
     const trimmed = name.trim();
     if (!trimmed) return { error: "Name can't be empty." };
@@ -140,7 +149,7 @@ export function useGroceries() {
     return { error: null };
   }
 
-  async function addItem(name: string, categoryId: string | null) {
+  async function addItem(name: string, categoryId: string | null, sourceMealEntryId: string | null = null) {
     if (!familyId || !profile) return { error: "You're not in a family yet." };
     const targetCategoryId = categoryId ?? defaultPlace?.id ?? null;
     const trimmedName = name.trim();
@@ -154,6 +163,7 @@ export function useGroceries() {
         family_id: familyId,
         name: trimmedName,
         category_id: targetCategoryId,
+        source_meal_entry_id: sourceMealEntryId,
         created_by: profile.id,
       })
       .select()
@@ -220,12 +230,26 @@ export function useGroceries() {
     if (error) refetch();
   }
 
+  function itemsForMeal(mealEntryId: string): GroceryItem[] {
+    return activeItems.filter((i) => i.source_meal_entry_id === mealEntryId);
+  }
+
+  async function removeItemsForMeal(mealEntryId: string) {
+    setItems((prev) => prev.map((i) => (i.source_meal_entry_id === mealEntryId ? { ...i, is_archived: true } : i)));
+    const { error } = await supabase
+      .from("grocery_items")
+      .update({ is_archived: true })
+      .eq("source_meal_entry_id", mealEntryId);
+    if (error) refetch();
+  }
+
   return {
     items: activeItems,
     places,
     defaultPlace,
     isLoading,
     addPlace,
+    updatePlaceIcon,
     renamePlace,
     deletePlace,
     addItem,
@@ -234,6 +258,8 @@ export function useGroceries() {
     deleteItem,
     removeFromList,
     clearChecked,
+    itemsForMeal,
+    removeItemsForMeal,
     getHistoryForPlace,
   };
 }

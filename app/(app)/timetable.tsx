@@ -75,7 +75,8 @@ export default function TimetableScreen() {
 
   const [isAdding, setIsAdding] = useState(false);
   const [newMemberId, setNewMemberId] = useState<string | null>(null);
-  const [newDayOfWeek, setNewDayOfWeek] = useState(0);
+  const [newAppliesToWholeFamily, setNewAppliesToWholeFamily] = useState(false);
+  const [newDaysOfWeek, setNewDaysOfWeek] = useState<number[]>([0]);
   const [newStart, setNewStart] = useState(() => timeStringToDate("09:00"));
   const [newEnd, setNewEnd] = useState(() => timeStringToDate("17:00"));
   const [newLabel, setNewLabel] = useState("");
@@ -103,7 +104,8 @@ export default function TimetableScreen() {
 
   const occurrences = useMemo(() => expandTimetableWeek(blocks, overrides, weekStart), [blocks, overrides, weekStart]);
   const filteredOccurrences = useMemo(
-    () => (memberFilter ? occurrences.filter((o) => o.profileId === memberFilter) : occurrences),
+    () =>
+      memberFilter ? occurrences.filter((o) => o.appliesToWholeFamily || o.profileId === memberFilter) : occurrences,
     [occurrences, memberFilter]
   );
 
@@ -130,18 +132,24 @@ export default function TimetableScreen() {
 
   function openAddBlock() {
     setNewMemberId(members[0]?.id ?? null);
-    setNewDayOfWeek(0);
+    setNewAppliesToWholeFamily(false);
+    setNewDaysOfWeek([0]);
     setNewStart(timeStringToDate("09:00"));
     setNewEnd(timeStringToDate("17:00"));
     setNewLabel("");
     setIsAdding(true);
   }
 
+  function toggleNewDay(day: number) {
+    setNewDaysOfWeek((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+  }
+
   async function handleSaveNewBlock() {
-    if (!newMemberId) return;
+    if ((!newAppliesToWholeFamily && !newMemberId) || newDaysOfWeek.length === 0) return;
     await addBlock({
       profileId: newMemberId,
-      dayOfWeek: newDayOfWeek,
+      appliesToWholeFamily: newAppliesToWholeFamily,
+      daysOfWeek: newDaysOfWeek,
       startTime: dateToTimeString(newStart),
       endTime: dateToTimeString(newEnd),
       label: newLabel.trim(),
@@ -312,8 +320,8 @@ export default function TimetableScreen() {
                       ((minutesFromMidnight(occ.endTime) - minutesFromMidnight(occ.startTime)) / 60) * hourHeight
                     );
                     const width = 100 / dayOccurrences.length;
-                    const member = members.find((m) => m.id === occ.profileId);
-                    const color = member ? getMemberColor(member) : NEUTRAL_COLOR;
+                    const member = occ.appliesToWholeFamily ? null : members.find((m) => m.id === occ.profileId);
+                    const color = occ.appliesToWholeFamily ? NEUTRAL_COLOR : member ? getMemberColor(member) : NEUTRAL_COLOR;
                     return (
                       <TouchableOpacity
                         key={occ.key}
@@ -330,7 +338,7 @@ export default function TimetableScreen() {
                         onPress={() => openEditOccurrence(occ)}
                       >
                         <Text style={styles.blockText} numberOfLines={1}>
-                          {member?.full_name ?? t("common.member")}
+                          {occ.appliesToWholeFamily ? t("common.wholeFamily") : member?.full_name ?? t("common.member")}
                         </Text>
                         {occ.label ? (
                           <Text style={styles.blockSubtext} numberOfLines={1}>
@@ -352,12 +360,21 @@ export default function TimetableScreen() {
 
         <FieldLabel icon="person-outline" label={t("timetable.member")} />
         <View style={styles.chipRow}>
+          <Chip
+            label={t("common.wholeFamily")}
+            selected={newAppliesToWholeFamily}
+            onPress={() => setNewAppliesToWholeFamily(true)}
+            color={NEUTRAL_COLOR}
+          />
           {members.map((m) => (
             <Chip
               key={m.id}
               label={m.full_name ?? t("common.member")}
-              selected={newMemberId === m.id}
-              onPress={() => setNewMemberId(m.id)}
+              selected={!newAppliesToWholeFamily && newMemberId === m.id}
+              onPress={() => {
+                setNewAppliesToWholeFamily(false);
+                setNewMemberId(m.id);
+              }}
               color={getMemberColor(m)}
             />
           ))}
@@ -369,8 +386,8 @@ export default function TimetableScreen() {
             <Chip
               key={label}
               label={label}
-              selected={newDayOfWeek === i}
-              onPress={() => setNewDayOfWeek(i)}
+              selected={newDaysOfWeek.includes(i)}
+              onPress={() => toggleNewDay(i)}
               color={sectionColors.calendar}
             />
           ))}

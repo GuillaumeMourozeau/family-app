@@ -1,7 +1,11 @@
-// Verified against education.gouv.fr (2026-2027 arrêté published 23 Oct 2025)
-// and service-public.gouv.fr (2025-2026). Covers the current school year
-// through summer 2027; the 2027-2028 back-to-school date isn't published
-// yet, so the 2027 summer break end date below is an estimate.
+// Verified against education.gouv.fr: 2025-2026 (service-public.gouv.fr),
+// 2026-2027 (arrêté published 23 Oct 2025), and 2027-2028 (arrêté published
+// 23 Jul 2026) — the French Ministry of Education only publishes each
+// school year's calendar roughly 1-2 years ahead, so 2028-2029 onward
+// genuinely isn't set yet by anyone, including the government itself.
+// Covers through summer 2028; that final "Été" end date is an estimate
+// (first-week-of-September pattern) since the 2028-2029 back-to-school
+// date isn't published yet.
 
 export type SchoolZone = "A" | "B" | "C";
 
@@ -32,8 +36,18 @@ export const FRENCH_SCHOOL_HOLIDAYS: SchoolHolidayPeriod[] = [
   { name: "Printemps", zone: "A", start: "2027-04-10", end: "2027-04-26" },
   { name: "Printemps", zone: "B", start: "2027-04-17", end: "2027-05-03" },
   { name: "Printemps", zone: "C", start: "2027-04-03", end: "2027-04-19" },
-  // 2027-2028 back-to-school date isn't published yet; estimated.
   { name: "Été", zone: "ALL", start: "2027-07-03", end: "2027-09-01" },
+  // 2027-2028
+  { name: "Toussaint", zone: "ALL", start: "2027-10-23", end: "2027-11-08" },
+  { name: "Noël", zone: "ALL", start: "2027-12-18", end: "2028-01-03" },
+  { name: "Hiver", zone: "A", start: "2028-02-19", end: "2028-03-06" },
+  { name: "Hiver", zone: "B", start: "2028-02-05", end: "2028-02-21" },
+  { name: "Hiver", zone: "C", start: "2028-02-12", end: "2028-02-28" },
+  { name: "Printemps", zone: "A", start: "2028-04-22", end: "2028-05-09" },
+  { name: "Printemps", zone: "B", start: "2028-04-08", end: "2028-04-24" },
+  { name: "Printemps", zone: "C", start: "2028-04-15", end: "2028-05-02" },
+  // 2028-2029 back-to-school date isn't published yet; estimated.
+  { name: "Été", zone: "ALL", start: "2028-07-04", end: "2028-09-01" },
 ];
 
 export function getSchoolHolidaysInRange(zone: SchoolZone, rangeStart: Date, rangeEnd: Date): SchoolHolidayPeriod[] {

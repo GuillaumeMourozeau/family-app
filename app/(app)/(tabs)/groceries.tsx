@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useGroceries, type GroceryItem, type GroceryPlace } from "@/hooks/useGroceries";
 import { displayPlaceName } from "@/lib/groceryPlaces";
+import { GROCERY_STORE_ICONS } from "@/lib/groceryStoreIcons";
 import { useProfile } from "@/hooks/useProfile";
 import { isNewItem } from "@/lib/newBadge";
 import { TabScreenHeader } from "@/components/TabScreenHeader";
@@ -24,6 +25,7 @@ export default function GroceriesScreen() {
     defaultPlace,
     isLoading,
     addPlace,
+    updatePlaceIcon,
     renamePlace,
     deletePlace,
     addItem,
@@ -47,6 +49,7 @@ export default function GroceriesScreen() {
 
   const [editingPlace, setEditingPlace] = useState<GroceryPlace | null>(null);
   const [editPlaceName, setEditPlaceName] = useState("");
+  const [isPickingIcon, setIsPickingIcon] = useState(false);
 
   const sortedPlaces = useMemo(
     () => [...places].sort((a, b) => (a.is_default ? -1 : b.is_default ? 1 : 0)),
@@ -126,6 +129,13 @@ export default function GroceriesScreen() {
     setEditingPlace(null);
   }
 
+  function handleSelectIcon(icon: (typeof GROCERY_STORE_ICONS)[number]) {
+    if (!editingPlace) return;
+    updatePlaceIcon(editingPlace.id, icon);
+    setEditingPlace({ ...editingPlace, icon });
+    setIsPickingIcon(false);
+  }
+
   function handleRemoveHistoryEntry(entry: { id: string; name: string }) {
     const isStillActive = items.some((i) => i.id === entry.id);
     if (!isStillActive) {
@@ -198,7 +208,12 @@ export default function GroceriesScreen() {
             <View style={styles.section}>
               <View style={styles.placeHeader}>
                 <TouchableOpacity style={styles.placeHeaderMain} onPress={() => setAddingPlace(place)}>
-                  <Text style={styles.placeName}>{displayPlaceName(place, t)}</Text>
+                  <View style={styles.placeNameRow}>
+                    <View style={styles.placeIconCircle}>
+                      <Ionicons name={place.icon} size={17} color={sectionColors.groceries} />
+                    </View>
+                    <Text style={styles.placeName}>{displayPlaceName(place, t)}</Text>
+                  </View>
                   <Text style={styles.placeAddHint}>{t("groceries.addHint")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => openEditPlace(place)} hitSlop={8} style={styles.editIcon}>
@@ -342,6 +357,14 @@ export default function GroceriesScreen() {
           title={t("groceries.editPlace")}
         />
         <TextField placeholder={t("groceries.placeNamePlaceholder")} value={editPlaceName} onChangeText={setEditPlaceName} />
+
+        <TouchableOpacity style={styles.changeIconRow} onPress={() => setIsPickingIcon(true)}>
+          <View style={styles.placeIconCircleLarge}>
+            {editingPlace && <Ionicons name={editingPlace.icon} size={22} color={sectionColors.groceries} />}
+          </View>
+          <Text style={styles.changeIconText}>{t("groceries.changeIcon")}</Text>
+        </TouchableOpacity>
+
         <Button
           label={t("groceries.saveName")}
           onPress={handleSavePlaceName}
@@ -365,6 +388,30 @@ export default function GroceriesScreen() {
             ))}
           </>
         )}
+      </BottomSheetModal>
+
+      <BottomSheetModal
+        visible={isPickingIcon}
+        onClose={() => setIsPickingIcon(false)}
+        contentStyle={styles.modalContentScrollable}
+      >
+        <ModalTitle
+          icon="image-outline"
+          tint={sectionColors.groceries}
+          tintBackground={sectionTints.groceries}
+          title={t("groceries.chooseIcon")}
+        />
+        <View style={styles.iconGrid}>
+          {GROCERY_STORE_ICONS.map((icon) => (
+            <TouchableOpacity
+              key={icon}
+              style={[styles.iconOption, editingPlace?.icon === icon && styles.iconOptionSelected]}
+              onPress={() => handleSelectIcon(icon)}
+            >
+              <Ionicons name={icon} size={20} color={editingPlace?.icon === icon ? colors.white : colors.textMuted} />
+            </TouchableOpacity>
+          ))}
+        </View>
       </BottomSheetModal>
     </View>
   );
@@ -409,8 +456,37 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   placeHeaderMain: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  placeNameRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexShrink: 1 },
+  placeIconCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: sectionTints.groceries,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  placeIconCircleLarge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: sectionTints.groceries,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   placeName: { fontSize: 19, fontWeight: "800", color: sectionColors.groceries },
   placeAddHint: { fontSize: 13, fontWeight: "700", color: sectionColors.groceries },
+  changeIconRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.md },
+  changeIconText: { fontSize: 14, fontWeight: "700", color: sectionColors.groceries },
+  iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
+  iconOption: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconOptionSelected: { backgroundColor: sectionColors.groceries },
   editIcon: { paddingLeft: spacing.md },
   emptyPlaceText: { fontSize: 13, color: colors.textFaint, paddingBottom: spacing.sm },
   addPlaceRow: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },

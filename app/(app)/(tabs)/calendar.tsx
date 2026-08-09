@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, SectionList, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, SectionList, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -312,17 +312,24 @@ export default function CalendarScreen() {
             onSelectDay={setSelectedDay}
             onNavigate={navigateMonth}
           />
-          <DayAgenda
-            date={selectedDay}
-            occurrences={selectedDayOccurrences}
-            members={members}
-            holiday={selectedDayHoliday}
-            onDeleteEvent={deleteEvent}
-          />
+          <ScrollView style={styles.flex} contentContainerStyle={styles.dayAgendaContent}>
+            <DayAgenda
+              date={selectedDay}
+              occurrences={selectedDayOccurrences}
+              members={members}
+              holiday={selectedDayHoliday}
+              onDeleteEvent={deleteEvent}
+            />
+          </ScrollView>
         </View>
       )}
 
-      <BottomSheetModal visible={isAdding} onClose={() => setIsAdding(false)} contentStyle={styles.modalContentScrollable}>
+      <BottomSheetModal
+        visible={isAdding}
+        onClose={() => setIsAdding(false)}
+        contentStyle={styles.modalContentScrollable}
+        footer={<Button label={t("calendar.addEvent")} onPress={handleAddEvent} style={styles.submitButton} />}
+      >
         <ModalTitle icon="calendar" tint={sectionColors.calendar} tintBackground={sectionTints.calendar} title={t("calendar.newEvent")} />
         <TextField placeholder={t("calendar.eventTitlePlaceholder")} value={title} onChangeText={setTitle} autoFocus />
 
@@ -398,8 +405,6 @@ export default function CalendarScreen() {
             trackColor={{ false: colors.border, true: sectionColors.calendar }}
           />
         </View>
-
-        <Button label={t("calendar.addEvent")} onPress={handleAddEvent} style={styles.submitButton} />
       </BottomSheetModal>
     </View>
   );
@@ -408,6 +413,7 @@ export default function CalendarScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
+  dayAgendaContent: { paddingBottom: 40 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   listContent: { paddingBottom: 40 },
   viewSwitcherRow: {

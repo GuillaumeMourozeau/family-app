@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useMealPlan, type MealPlanEntry, type MealType } from "@/hooks/useMealPlan";
 import { useRecipes, type Recipe } from "@/hooks/useRecipes";
+import { useGroceries } from "@/hooks/useGroceries";
 import { formatDate, startOfWeek } from "@/lib/dateUtils";
 import { MEAL_TYPES, MEAL_TYPE_ORDER, MEAL_TYPE_ICONS } from "@/lib/mealTypes";
 import { TabScreenHeader } from "@/components/TabScreenHeader";
@@ -32,10 +33,11 @@ export default function MealsScreen() {
   const { t } = useTranslation();
   const { entries, isLoading, addMeal, deleteMeal } = useMealPlan();
   const { recipes, addRecipe } = useRecipes();
+  const { itemsForMeal, removeItemsForMeal } = useGroceries();
 
   const [weekAnchor, setWeekAnchor] = useState(new Date());
   const [addingForDate, setAddingForDate] = useState<string | null>(null);
-  const [mealType, setMealType] = useState<MealType>("dinner");
+  const [mealType, setMealType] = useState<MealType>("breakfast");
   const [addMode, setAddMode] = useState<AddMode>("quick");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [quickTitle, setQuickTitle] = useState("");
@@ -79,7 +81,7 @@ export default function MealsScreen() {
 
   function openAddMeal(dateKey: string) {
     setAddingForDate(dateKey);
-    setMealType("dinner");
+    setMealType("breakfast");
     setAddMode("quick");
     setSelectedRecipe(null);
     setQuickTitle("");
@@ -117,6 +119,26 @@ export default function MealsScreen() {
       setIsSaving(false);
     }
     setAddingForDate(null);
+  }
+
+  function handleDeleteMeal(entry: MealPlanEntry) {
+    const linkedItems = itemsForMeal(entry.id);
+    if (linkedItems.length === 0) {
+      deleteMeal(entry.id);
+      return;
+    }
+    Alert.alert(t("meals.deleteMealTitle"), t("meals.deleteMealWithGroceriesMessage", { count: linkedItems.length }), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("meals.deleteMealOnly"), onPress: () => deleteMeal(entry.id) },
+      {
+        text: t("meals.deleteMealAndGroceries"),
+        style: "destructive",
+        onPress: async () => {
+          await removeItemsForMeal(entry.id);
+          await deleteMeal(entry.id);
+        },
+      },
+    ]);
   }
 
   async function handleCreateRecipe(value: RecipeFormValue) {
@@ -186,7 +208,7 @@ export default function MealsScreen() {
                     <TouchableOpacity onPress={() => setAddingIngredientsForEntry(entry)} hitSlop={8}>
                       <Ionicons name="cart-outline" size={18} color={sectionColors.groceries} />
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => deleteMeal(entry.id)} hitSlop={8}>
+                    <TouchableOpacity onPress={() => handleDeleteMeal(entry)} hitSlop={8}>
                       <Text style={styles.deleteLink}>✕</Text>
                     </TouchableOpacity>
                   </View>
@@ -250,7 +272,11 @@ export default function MealsScreen() {
         </View>
 
         {addMode === "quick" && (
-          <TextField placeholder={t("meals.whatsForDinnerPlaceholder")} value={quickTitle} onChangeText={setQuickTitle} />
+          <TextField
+            placeholder={t("meals.whatsForPlaceholder", { mealType: t(`common.mealTypes.${mealType}`).toLowerCase() })}
+            value={quickTitle}
+            onChangeText={setQuickTitle}
+          />
         )}
 
         {addMode === "existing" &&
@@ -316,6 +342,7 @@ export default function MealsScreen() {
             .find((r) => r.id === addingIngredientsForEntry?.recipe_id)
             ?.ingredients.map((i) => ({ quantity: i.quantity, name: i.name })) ?? []
         }
+        sourceMealEntryId={addingIngredientsForEntry?.id ?? null}
       />
     </View>
   );

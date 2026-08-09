@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  View,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -16,9 +17,15 @@ type Props = {
   onClose: () => void;
   children: ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
+  // Rendered below the scrollable content but still inside the sheet, and
+  // NOT part of the scroll area — use this for a primary action button so
+  // it's always reachable without needing to scroll all the way down
+  // (scrolling to the bottom of a tall, dynamically-growing form was
+  // unreliable enough to be a real bug people hit).
+  footer?: ReactNode;
 };
 
-export function BottomSheetModal({ visible, onClose, children, contentStyle }: Props) {
+export function BottomSheetModal({ visible, onClose, children, contentStyle, footer }: Props) {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
@@ -32,6 +39,7 @@ export function BottomSheetModal({ visible, onClose, children, contentStyle }: P
             >
               {children}
             </ScrollView>
+            {footer && <View style={styles.footer}>{footer}</View>}
           </Pressable>
         </Pressable>
       </KeyboardAvoidingView>
@@ -50,4 +58,5 @@ const styles = StyleSheet.create({
   },
   scroll: { flexShrink: 1 },
   scrollContent: { padding: spacing.xl, gap: spacing.sm + 2 },
+  footer: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl, paddingTop: spacing.sm },
 });

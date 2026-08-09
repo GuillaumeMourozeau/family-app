@@ -4,7 +4,8 @@ import { useProfile } from "@/hooks/useProfile";
 
 export type TimetableBlock = {
   id: string;
-  profile_id: string;
+  profile_id: string | null;
+  applies_to_whole_family: boolean;
   day_of_week: number; // 0 = Monday .. 6 = Sunday
   start_time: string; // "HH:MM:SS"
   end_time: string;
@@ -63,22 +64,25 @@ export function useTimetable() {
   }, [familyId, refetch, instanceId]);
 
   async function addBlock(input: {
-    profileId: string;
-    dayOfWeek: number;
+    profileId: string | null;
+    appliesToWholeFamily: boolean;
+    daysOfWeek: number[];
     startTime: string;
     endTime: string;
     label: string;
   }) {
-    if (!familyId || !profile) return;
-    await supabase.from("timetable_blocks").insert({
+    if (!familyId || !profile || input.daysOfWeek.length === 0) return;
+    const rows = input.daysOfWeek.map((dayOfWeek) => ({
       family_id: familyId,
-      profile_id: input.profileId,
-      day_of_week: input.dayOfWeek,
+      profile_id: input.appliesToWholeFamily ? null : input.profileId,
+      applies_to_whole_family: input.appliesToWholeFamily,
+      day_of_week: dayOfWeek,
       start_time: input.startTime,
       end_time: input.endTime,
       label: input.label,
       created_by: profile.id,
-    });
+    }));
+    await supabase.from("timetable_blocks").insert(rows);
   }
 
   async function updateBlock(

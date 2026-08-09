@@ -4,7 +4,8 @@ import { formatTime } from "@/lib/dateUtils";
 export type TimetableOccurrence = {
   key: string;
   blockId: string;
-  profileId: string;
+  profileId: string | null;
+  appliesToWholeFamily: boolean;
   date: Date;
   startTime: string;
   endTime: string;
@@ -67,6 +68,7 @@ export function expandTimetableWeek(
       key: `${block.id}:${dateKey}`,
       blockId: block.id,
       profileId: block.profile_id,
+      appliesToWholeFamily: block.applies_to_whole_family,
       date,
       startTime: override?.start_time ?? block.start_time,
       endTime: override?.end_time ?? block.end_time,
