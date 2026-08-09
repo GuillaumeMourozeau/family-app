@@ -54,6 +54,14 @@ export function RecurrencePicker({ value, onChange, tint }: Props) {
 
   function setEndType(endType: RecurrenceEndType) {
     if (!value) return;
+    // "After N times" is meaningless with no count — default it in immediately
+    // rather than silently never enforcing an end (the bug this fixes: count
+    // stayed null until the user typed in the field, so the event repeated
+    // forever since the after_count check short-circuits when count is null).
+    if (endType === "after_count" && value.count == null) {
+      onChange({ ...value, endType, count: 10 });
+      return;
+    }
     onChange({ ...value, endType });
   }
 
