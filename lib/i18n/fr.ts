@@ -230,6 +230,7 @@ export default {
     serves: " · {{count}} pers.",
     addMeal: "Ajouter un repas",
     newMeal: "Nouveau repas",
+    editMeal: "Modifier le repas",
     mealType: "Type de repas",
     menu: "Menu",
     quickMenu: "Menu rapide",

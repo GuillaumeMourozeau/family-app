@@ -31,12 +31,13 @@ function toDateKey(date: Date): string {
 
 export default function MealsScreen() {
   const { t } = useTranslation();
-  const { entries, isLoading, addMeal, deleteMeal } = useMealPlan();
+  const { entries, isLoading, addMeal, updateMeal, deleteMeal } = useMealPlan();
   const { recipes, addRecipe } = useRecipes();
   const { itemsForMeal, removeItemsForMeal } = useGroceries();
 
   const [weekAnchor, setWeekAnchor] = useState(new Date());
   const [addingForDate, setAddingForDate] = useState<string | null>(null);
+  const [editingEntry, setEditingEntry] = useState<MealPlanEntry | null>(null);
   const [mealType, setMealType] = useState<MealType>("breakfast");
   const [addMode, setAddMode] = useState<AddMode>("quick");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
@@ -81,6 +82,7 @@ export default function MealsScreen() {
 
   function openAddMeal(dateKey: string) {
     setAddingForDate(dateKey);
+    setEditingEntry(null);
     setMealType("breakfast");
     setAddMode("quick");
     setSelectedRecipe(null);
@@ -89,11 +91,34 @@ export default function MealsScreen() {
     setMealDetails("");
   }
 
+  function openEditMeal(entry: MealPlanEntry) {
+    setAddingForDate(entry.date);
+    setEditingEntry(entry);
+    setMealType(entry.meal_type);
+    setAddMode("quick");
+    setSelectedRecipe(null);
+    setQuickTitle(entry.title);
+    setServes(entry.serves != null ? String(entry.serves) : "");
+    setMealDetails(entry.details ?? "");
+  }
+
   async function handleSubmitMeal() {
     if (!addingForDate) return;
     const servesNum = serves.trim() ? Number(serves.trim()) : null;
 
-    if (addMode === "quick") {
+    if (editingEntry) {
+      if (!quickTitle.trim()) return;
+      setIsSaving(true);
+      await updateMeal(editingEntry.id, {
+        date: editingEntry.date,
+        mealType,
+        recipeId: editingEntry.recipe_id,
+        title: quickTitle.trim(),
+        serves: servesNum,
+        details: mealDetails.trim() || null,
+      });
+      setIsSaving(false);
+    } else if (addMode === "quick") {
       if (!quickTitle.trim()) return;
       setIsSaving(true);
       await addMeal({
@@ -119,6 +144,7 @@ export default function MealsScreen() {
       setIsSaving(false);
     }
     setAddingForDate(null);
+    setEditingEntry(null);
   }
 
   function handleDeleteMeal(entry: MealPlanEntry) {
@@ -195,16 +221,18 @@ export default function MealsScreen() {
               ) : (
                 dayEntries.map((entry) => (
                   <View key={entry.id} style={styles.mealRow}>
-                    <View style={styles.mealIconBadge}>
-                      <Ionicons name={MEAL_TYPE_ICONS[entry.meal_type]} size={14} color={sectionColors.meals} />
-                    </View>
-                    <View style={styles.mealTextContainer}>
-                      <Text style={styles.mealTitle}>{entry.title}</Text>
-                      <Text style={styles.mealMeta}>
-                        {t(`common.mealTypes.${entry.meal_type}`)}
-                        {entry.serves ? t("meals.serves", { count: entry.serves }) : ""}
-                      </Text>
-                    </View>
+                    <TouchableOpacity style={styles.mealRowMain} onPress={() => openEditMeal(entry)}>
+                      <View style={styles.mealIconBadge}>
+                        <Ionicons name={MEAL_TYPE_ICONS[entry.meal_type]} size={14} color={sectionColors.meals} />
+                      </View>
+                      <View style={styles.mealTextContainer}>
+                        <Text style={styles.mealTitle}>{entry.title}</Text>
+                        <Text style={styles.mealMeta}>
+                          {t(`common.mealTypes.${entry.meal_type}`)}
+                          {entry.serves ? t("meals.serves", { count: entry.serves }) : ""}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={() => setAddingIngredientsForEntry(entry)} hitSlop={8}>
                       <Ionicons name="cart-outline" size={18} color={sectionColors.groceries} />
                     </TouchableOpacity>
@@ -223,8 +251,19 @@ export default function MealsScreen() {
         })}
       </ScrollView>
 
-      <BottomSheetModal visible={!!addingForDate} onClose={() => setAddingForDate(null)}>
-        <ModalTitle icon="restaurant" tint={sectionColors.meals} tintBackground={sectionTints.meals} title={t("meals.newMeal")} />
+      <BottomSheetModal
+        visible={!!addingForDate}
+        onClose={() => {
+          setAddingForDate(null);
+          setEditingEntry(null);
+        }}
+      >
+        <ModalTitle
+          icon="restaurant"
+          tint={sectionColors.meals}
+          tintBackground={sectionTints.meals}
+          title={editingEntry ? t("meals.editMeal") : t("meals.newMeal")}
+        />
 
         <FieldLabel icon="time-outline" label={t("meals.mealType")} />
         <View style={styles.chipRow}>
@@ -240,38 +279,42 @@ export default function MealsScreen() {
           ))}
         </View>
 
-        <FieldLabel icon="book-outline" label={t("meals.menu")} />
-        <View style={styles.chipRow}>
-          <Chip
-            label={t("meals.quickMenu")}
-            selected={addMode === "quick"}
-            onPress={() => {
-              setAddMode("quick");
-              setSelectedRecipe(null);
-            }}
-            color={sectionColors.meals}
-          />
-          <Chip
-            label={t("meals.existingRecipe")}
-            selected={addMode === "existing"}
-            onPress={() => {
-              setAddMode("existing");
-              setSelectedRecipe(null);
-            }}
-            color={sectionColors.meals}
-          />
-          <Chip
-            label={t("meals.newRecipeChip")}
-            selected={addMode === "new"}
-            onPress={() => {
-              setAddMode("new");
-              setSelectedRecipe(null);
-            }}
-            color={sectionColors.meals}
-          />
-        </View>
+        {!editingEntry && (
+          <>
+            <FieldLabel icon="book-outline" label={t("meals.menu")} />
+            <View style={styles.chipRow}>
+              <Chip
+                label={t("meals.quickMenu")}
+                selected={addMode === "quick"}
+                onPress={() => {
+                  setAddMode("quick");
+                  setSelectedRecipe(null);
+                }}
+                color={sectionColors.meals}
+              />
+              <Chip
+                label={t("meals.existingRecipe")}
+                selected={addMode === "existing"}
+                onPress={() => {
+                  setAddMode("existing");
+                  setSelectedRecipe(null);
+                }}
+                color={sectionColors.meals}
+              />
+              <Chip
+                label={t("meals.newRecipeChip")}
+                selected={addMode === "new"}
+                onPress={() => {
+                  setAddMode("new");
+                  setSelectedRecipe(null);
+                }}
+                color={sectionColors.meals}
+              />
+            </View>
+          </>
+        )}
 
-        {addMode === "quick" && (
+        {(editingEntry || addMode === "quick") && (
           <TextField
             placeholder={t("meals.whatsForPlaceholder", { mealType: t(`common.mealTypes.${mealType}`).toLowerCase() })}
             value={quickTitle}
@@ -279,7 +322,7 @@ export default function MealsScreen() {
           />
         )}
 
-        {addMode === "existing" &&
+        {!editingEntry && addMode === "existing" &&
           (selectedRecipe ? (
             <View style={styles.selectedRecipeRow}>
               <Text style={styles.selectedRecipeText}>{t("meals.selected", { name: selectedRecipe.name })}</Text>
@@ -294,7 +337,7 @@ export default function MealsScreen() {
             </TouchableOpacity>
           ))}
 
-        {addMode === "new" &&
+        {!editingEntry && addMode === "new" &&
           (selectedRecipe ? (
             <View style={styles.selectedRecipeRow}>
               <Text style={styles.selectedRecipeText}>{t("meals.created", { name: selectedRecipe.name })}</Text>
@@ -315,7 +358,12 @@ export default function MealsScreen() {
         <FieldLabel icon="document-text-outline" label={t("meals.notesOptional")} />
         <TextField placeholder={t("meals.notesPlaceholder")} value={mealDetails} onChangeText={setMealDetails} />
 
-        <Button label={t("meals.addMeal")} onPress={handleSubmitMeal} loading={isSaving} style={styles.submitButton} />
+        <Button
+          label={editingEntry ? t("common.save") : t("meals.addMeal")}
+          onPress={handleSubmitMeal}
+          loading={isSaving}
+          style={styles.submitButton}
+        />
       </BottomSheetModal>
 
       <BottomSheetModal visible={isPickingRecipe} onClose={() => setIsPickingRecipe(false)}>
@@ -377,6 +425,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },
+  mealRowMain: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm },
   mealIconBadge: {
     width: 26,
     height: 26,

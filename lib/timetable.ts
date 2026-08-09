@@ -59,22 +59,24 @@ export function expandTimetableWeek(
 
   const occurrences: TimetableOccurrence[] = [];
   for (const block of blocks) {
-    const date = new Date(weekStart);
-    date.setDate(date.getDate() + block.day_of_week);
-    const dateKey = toDateKey(date);
-    const override = overrideByKey.get(`${block.id}:${dateKey}`);
-    if (override?.is_cancelled) continue;
-    occurrences.push({
-      key: `${block.id}:${dateKey}`,
-      blockId: block.id,
-      profileId: block.profile_id,
-      appliesToWholeFamily: block.applies_to_whole_family,
-      date,
-      startTime: override?.start_time ?? block.start_time,
-      endTime: override?.end_time ?? block.end_time,
-      label: override?.label ?? block.label,
-      isOverridden: !!override,
-    });
+    for (const dayOfWeek of block.days_of_week) {
+      const date = new Date(weekStart);
+      date.setDate(date.getDate() + dayOfWeek);
+      const dateKey = toDateKey(date);
+      const override = overrideByKey.get(`${block.id}:${dateKey}`);
+      if (override?.is_cancelled) continue;
+      occurrences.push({
+        key: `${block.id}:${dateKey}`,
+        blockId: block.id,
+        profileId: block.profile_id,
+        appliesToWholeFamily: block.applies_to_whole_family,
+        date,
+        startTime: override?.start_time ?? block.start_time,
+        endTime: override?.end_time ?? block.end_time,
+        label: override?.label ?? block.label,
+        isOverridden: !!override,
+      });
+    }
   }
   return occurrences;
 }

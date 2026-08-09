@@ -6,7 +6,7 @@ export type TimetableBlock = {
   id: string;
   profile_id: string | null;
   applies_to_whole_family: boolean;
-  day_of_week: number; // 0 = Monday .. 6 = Sunday
+  days_of_week: number[]; // 0 = Monday .. 6 = Sunday
   start_time: string; // "HH:MM:SS"
   end_time: string;
   label: string;
@@ -72,26 +72,31 @@ export function useTimetable() {
     label: string;
   }) {
     if (!familyId || !profile || input.daysOfWeek.length === 0) return;
-    const rows = input.daysOfWeek.map((dayOfWeek) => ({
+    await supabase.from("timetable_blocks").insert({
       family_id: familyId,
       profile_id: input.appliesToWholeFamily ? null : input.profileId,
       applies_to_whole_family: input.appliesToWholeFamily,
-      day_of_week: dayOfWeek,
+      days_of_week: input.daysOfWeek,
       start_time: input.startTime,
       end_time: input.endTime,
       label: input.label,
       created_by: profile.id,
-    }));
-    await supabase.from("timetable_blocks").insert(rows);
+    });
   }
 
   async function updateBlock(
     id: string,
-    input: { startTime: string; endTime: string; label: string }
+    input: { startTime: string; endTime: string; label: string; daysOfWeek: number[] }
   ) {
+    if (input.daysOfWeek.length === 0) return;
     await supabase
       .from("timetable_blocks")
-      .update({ start_time: input.startTime, end_time: input.endTime, label: input.label })
+      .update({
+        start_time: input.startTime,
+        end_time: input.endTime,
+        label: input.label,
+        days_of_week: input.daysOfWeek,
+      })
       .eq("id", id);
   }
 

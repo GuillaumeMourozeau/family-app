@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import type { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
+import { DEFAULT_GROCERY_STORE_ICON } from "@/lib/groceryStoreIcons";
 
 export type GroceryPlace = {
   id: string;
   name: string;
   is_default: boolean;
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: string;
 };
 
 export type GroceryItem = {
@@ -103,11 +103,11 @@ export function useGroceries() {
     return historyByPlace.get(categoryId ?? "") ?? [];
   }
 
-  async function addPlace(name: string) {
+  async function addPlace(name: string, icon: string = DEFAULT_GROCERY_STORE_ICON) {
     if (!familyId) return null;
     const { data, error } = await supabase
       .from("grocery_categories")
-      .insert({ family_id: familyId, name })
+      .insert({ family_id: familyId, name, icon })
       .select()
       .single();
     if (error || !data) return null;
@@ -115,7 +115,7 @@ export function useGroceries() {
     return data;
   }
 
-  async function updatePlaceIcon(id: string, icon: keyof typeof Ionicons.glyphMap) {
+  async function updatePlaceIcon(id: string, icon: string) {
     setPlaces((prev) => prev.map((p) => (p.id === id ? { ...p, icon } : p)));
     const { error } = await supabase.from("grocery_categories").update({ icon }).eq("id", id);
     if (error) refetch();

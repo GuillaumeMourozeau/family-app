@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { PinchGestureHandler } from "react-native-gesture-handler";
+import { PanGestureHandler, PinchGestureHandler, State, type PanGestureHandlerStateChangeEvent } from "react-native-gesture-handler";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useTranslation } from "react-i18next";
 import { useTimetable } from "@/hooks/useTimetable";
@@ -33,6 +33,7 @@ const DEFAULT_HOUR_HEIGHT = 52;
 const MIN_HOUR_HEIGHT = 28;
 const MAX_HOUR_HEIGHT = 110;
 const DEFAULT_START_HOUR = 8;
+const SWIPE_DISTANCE_THRESHOLD = 60;
 
 type WeekMode = "full" | "work";
 
@@ -42,6 +43,8 @@ export default function TimetableScreen() {
   const { blocks, overrides, addBlock, updateBlock, deleteBlock, setOverride, clearOverride } = useTimetable();
   const { members } = useFamilyMembers();
   const scrollRef = useRef<ScrollView>(null);
+  const pinchRef = useRef(null);
+  const panRef = useRef(null);
 
   const [weekAnchor, setWeekAnchor] = useState(new Date());
   const [memberFilter, setMemberFilter] = useState<string | null>(null);
@@ -88,6 +91,7 @@ export default function TimetableScreen() {
   const [editStart, setEditStart] = useState(() => new Date());
   const [editEnd, setEditEnd] = useState(() => new Date());
   const [editLabel, setEditLabel] = useState("");
+  const [editDaysOfWeek, setEditDaysOfWeek] = useState<number[]>([]);
   const [showEditStartPicker, setShowEditStartPicker] = useState(false);
   const [showEditEndPicker, setShowEditEndPicker] = useState(false);
 
@@ -130,6 +134,13 @@ export default function TimetableScreen() {
     setWeekAnchor(next);
   }
 
+  function handleSwipeStateChange(event: PanGestureHandlerStateChangeEvent) {
+    const { state, translationX, translationY } = event.nativeEvent;
+    if (state !== State.END) return;
+    if (Math.abs(translationX) < SWIPE_DISTANCE_THRESHOLD || Math.abs(translationX) < Math.abs(translationY)) return;
+    navigateWeek(translationX < 0 ? 1 : -1);
+  }
+
   function openAddBlock() {
     setNewMemberId(members[0]?.id ?? null);
     setNewAppliesToWholeFamily(false);
@@ -163,6 +174,12 @@ export default function TimetableScreen() {
     setEditStart(timeStringToDate(occ.startTime));
     setEditEnd(timeStringToDate(occ.endTime));
     setEditLabel(occ.label);
+    const block = blocks.find((b) => b.id === occ.blockId);
+    setEditDaysOfWeek(block?.days_of_week ?? []);
+  }
+
+  function toggleEditDay(day: number) {
+    setEditDaysOfWeek((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
   }
 
   function dateKeyOf(date: Date): string {
@@ -183,7 +200,13 @@ export default function TimetableScreen() {
         label: editLabel.trim(),
       });
     } else {
-      await updateBlock(editingOccurrence.blockId, { startTime, endTime, label: editLabel.trim() });
+      if (editDaysOfWeek.length === 0) return;
+      await updateBlock(editingOccurrence.blockId, {
+        startTime,
+        endTime,
+        label: editLabel.trim(),
+        daysOfWeek: editDaysOfWeek,
+      });
     }
     setEditingOccurrence(null);
   }
@@ -286,10 +309,18 @@ export default function TimetableScreen() {
         ))}
       </View>
 
+      <PanGestureHandler
+        ref={panRef}
+        onHandlerStateChange={handleSwipeStateChange}
+        activeOffsetX={[-20, 20]}
+        failOffsetY={[-15, 15]}
+        simultaneousHandlers={[pinchRef, scrollRef]}
+      >
       <PinchGestureHandler
+        ref={pinchRef}
         onGestureEvent={onGestureEvent}
         onHandlerStateChange={onHandlerStateChange}
-        simultaneousHandlers={scrollRef}
+        simultaneousHandlers={[scrollRef, panRef]}
       >
         <ScrollView
           ref={scrollRef}
@@ -354,6 +385,7 @@ export default function TimetableScreen() {
           </View>
         </ScrollView>
       </PinchGestureHandler>
+      </PanGestureHandler>
 
       <BottomSheetModal visible={isAdding} onClose={() => setIsAdding(false)}>
         <ModalTitle icon="time" tint={sectionColors.calendar} tintBackground={sectionTints.calendar} title={t("timetable.newBlock")} />
@@ -440,6 +472,23 @@ export default function TimetableScreen() {
           <Chip label={t("timetable.thisDayOnly")} selected={editScope === "day"} onPress={() => setEditScope("day")} color={sectionColors.calendar} />
           <Chip label={t("timetable.everyWeek")} selected={editScope === "series"} onPress={() => setEditScope("series")} color={sectionColors.calendar} />
         </View>
+
+        {editScope === "series" && (
+          <>
+            <FieldLabel icon="calendar-outline" label={t("timetable.day")} />
+            <View style={styles.chipRow}>
+              {DAY_LABELS.map((label, i) => (
+                <Chip
+                  key={label}
+                  label={label}
+                  selected={editDaysOfWeek.includes(i)}
+                  onPress={() => toggleEditDay(i)}
+                  color={sectionColors.calendar}
+                />
+              ))}
+            </View>
+          </>
+        )}
 
         <View style={styles.dateRow}>
           <TouchableOpacity style={styles.dateButton} onPress={() => setShowEditStartPicker(true)}>

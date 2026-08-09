@@ -230,6 +230,7 @@ export default {
     serves: " · Serves {{count}}",
     addMeal: "Add meal",
     newMeal: "New meal",
+    editMeal: "Edit meal",
     mealType: "Meal type",
     menu: "Menu",
     quickMenu: "Quick menu",

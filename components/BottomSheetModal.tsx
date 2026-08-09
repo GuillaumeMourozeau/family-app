@@ -29,27 +29,34 @@ export function BottomSheetModal({ visible, onClose, children, contentStyle, foo
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-        <Pressable style={styles.overlay} onPress={onClose}>
-          <Pressable style={[styles.content, contentStyle]} onPress={(e) => e.stopPropagation()}>
-            <ScrollView
-              style={styles.scroll}
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              {children}
-            </ScrollView>
-            {footer && <View style={styles.footer}>{footer}</View>}
-          </Pressable>
-        </Pressable>
+        {/*
+          The backdrop and the sheet are siblings, not nested — the sheet
+          renders on top and naturally absorbs its own touches, so closing
+          on backdrop-tap doesn't need a content-side Pressable+stopPropagation
+          wrapping the ScrollView. A Pressable ancestor around a ScrollView
+          fights the scroll gesture for the responder, which made scrolling
+          inside the sheet feel sticky/unsmooth.
+        */}
+        <Pressable style={[StyleSheet.absoluteFill, styles.backdrop]} onPress={onClose} />
+        <View style={[styles.content, contentStyle]}>
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </ScrollView>
+          {footer && <View style={styles.footer}>{footer}</View>}
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
+  flex: { flex: 1, justifyContent: "flex-end" },
+  backdrop: { backgroundColor: "rgba(0,0,0,0.4)" },
   content: {
     backgroundColor: colors.white,
     borderTopLeftRadius: radii.xl,

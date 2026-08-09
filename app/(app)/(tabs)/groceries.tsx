@@ -5,10 +5,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useGroceries, type GroceryItem, type GroceryPlace } from "@/hooks/useGroceries";
 import { displayPlaceName } from "@/lib/groceryPlaces";
-import { GROCERY_STORE_ICONS } from "@/lib/groceryStoreIcons";
+import { GROCERY_STORE_ICONS, DEFAULT_GROCERY_STORE_ICON } from "@/lib/groceryStoreIcons";
 import { useProfile } from "@/hooks/useProfile";
 import { isNewItem } from "@/lib/newBadge";
 import { TabScreenHeader } from "@/components/TabScreenHeader";
+import { GroceryStoreIcon } from "@/components/GroceryStoreIcon";
 import { BottomSheetModal } from "@/components/BottomSheetModal";
 import { ModalTitle } from "@/components/ModalTitle";
 import { FieldLabel } from "@/components/FieldLabel";
@@ -46,10 +47,11 @@ export default function GroceriesScreen() {
 
   const [isAddingPlace, setIsAddingPlace] = useState(false);
   const [newPlaceName, setNewPlaceName] = useState("");
+  const [newPlaceIcon, setNewPlaceIcon] = useState<string>(DEFAULT_GROCERY_STORE_ICON);
 
   const [editingPlace, setEditingPlace] = useState<GroceryPlace | null>(null);
   const [editPlaceName, setEditPlaceName] = useState("");
-  const [isPickingIcon, setIsPickingIcon] = useState(false);
+  const [pickingIconFor, setPickingIconFor] = useState<"new" | "edit" | null>(null);
 
   const sortedPlaces = useMemo(
     () => [...places].sort((a, b) => (a.is_default ? -1 : b.is_default ? 1 : 0)),
@@ -104,10 +106,16 @@ export default function GroceriesScreen() {
     setAddingPlace(null);
   }
 
+  function openAddPlace() {
+    setNewPlaceName("");
+    setNewPlaceIcon(DEFAULT_GROCERY_STORE_ICON);
+    setIsAddingPlace(true);
+  }
+
   async function handleCreatePlace() {
     if (!newPlaceName.trim() || isSubmitting) return;
     setIsSubmitting(true);
-    await addPlace(newPlaceName.trim());
+    await addPlace(newPlaceName.trim(), newPlaceIcon);
     setIsSubmitting(false);
     setNewPlaceName("");
     setIsAddingPlace(false);
@@ -129,11 +137,14 @@ export default function GroceriesScreen() {
     setEditingPlace(null);
   }
 
-  function handleSelectIcon(icon: (typeof GROCERY_STORE_ICONS)[number]) {
-    if (!editingPlace) return;
-    updatePlaceIcon(editingPlace.id, icon);
-    setEditingPlace({ ...editingPlace, icon });
-    setIsPickingIcon(false);
+  function handleSelectIcon(icon: string) {
+    if (pickingIconFor === "new") {
+      setNewPlaceIcon(icon);
+    } else if (pickingIconFor === "edit" && editingPlace) {
+      updatePlaceIcon(editingPlace.id, icon);
+      setEditingPlace({ ...editingPlace, icon });
+    }
+    setPickingIconFor(null);
   }
 
   function handleRemoveHistoryEntry(entry: { id: string; name: string }) {
@@ -192,7 +203,7 @@ export default function GroceriesScreen() {
         contentContainerStyle={styles.listContent}
         ListFooterComponent={
           <View>
-            <TouchableOpacity style={styles.addPlaceRow} onPress={() => setIsAddingPlace(true)}>
+            <TouchableOpacity style={styles.addPlaceRow} onPress={openAddPlace}>
               <Text style={styles.addPlaceText}>{t("groceries.addNewPlace")}</Text>
             </TouchableOpacity>
             {hasChecked && (
@@ -210,7 +221,7 @@ export default function GroceriesScreen() {
                 <TouchableOpacity style={styles.placeHeaderMain} onPress={() => setAddingPlace(place)}>
                   <View style={styles.placeNameRow}>
                     <View style={styles.placeIconCircle}>
-                      <Ionicons name={place.icon} size={17} color={sectionColors.groceries} />
+                      <GroceryStoreIcon icon={place.icon} size={17} color={sectionColors.groceries} />
                     </View>
                     <Text style={styles.placeName}>{displayPlaceName(place, t)}</Text>
                   </View>
@@ -337,6 +348,14 @@ export default function GroceriesScreen() {
           autoFocus
           onSubmitEditing={handleCreatePlace}
         />
+
+        <TouchableOpacity style={styles.changeIconRow} onPress={() => setPickingIconFor("new")}>
+          <View style={styles.placeIconCircleLarge}>
+            <GroceryStoreIcon icon={newPlaceIcon} size={22} color={sectionColors.groceries} />
+          </View>
+          <Text style={styles.changeIconText}>{t("groceries.changeIcon")}</Text>
+        </TouchableOpacity>
+
         <Button
           label={t("groceries.addPlace")}
           onPress={handleCreatePlace}
@@ -358,9 +377,9 @@ export default function GroceriesScreen() {
         />
         <TextField placeholder={t("groceries.placeNamePlaceholder")} value={editPlaceName} onChangeText={setEditPlaceName} />
 
-        <TouchableOpacity style={styles.changeIconRow} onPress={() => setIsPickingIcon(true)}>
+        <TouchableOpacity style={styles.changeIconRow} onPress={() => setPickingIconFor("edit")}>
           <View style={styles.placeIconCircleLarge}>
-            {editingPlace && <Ionicons name={editingPlace.icon} size={22} color={sectionColors.groceries} />}
+            {editingPlace && <GroceryStoreIcon icon={editingPlace.icon} size={22} color={sectionColors.groceries} />}
           </View>
           <Text style={styles.changeIconText}>{t("groceries.changeIcon")}</Text>
         </TouchableOpacity>
@@ -391,8 +410,8 @@ export default function GroceriesScreen() {
       </BottomSheetModal>
 
       <BottomSheetModal
-        visible={isPickingIcon}
-        onClose={() => setIsPickingIcon(false)}
+        visible={pickingIconFor !== null}
+        onClose={() => setPickingIconFor(null)}
         contentStyle={styles.modalContentScrollable}
       >
         <ModalTitle
@@ -402,15 +421,18 @@ export default function GroceriesScreen() {
           title={t("groceries.chooseIcon")}
         />
         <View style={styles.iconGrid}>
-          {GROCERY_STORE_ICONS.map((icon) => (
-            <TouchableOpacity
-              key={icon}
-              style={[styles.iconOption, editingPlace?.icon === icon && styles.iconOptionSelected]}
-              onPress={() => handleSelectIcon(icon)}
-            >
-              <Ionicons name={icon} size={20} color={editingPlace?.icon === icon ? colors.white : colors.textMuted} />
-            </TouchableOpacity>
-          ))}
+          {GROCERY_STORE_ICONS.map((icon) => {
+            const currentIcon = pickingIconFor === "new" ? newPlaceIcon : editingPlace?.icon;
+            return (
+              <TouchableOpacity
+                key={icon}
+                style={[styles.iconOption, currentIcon === icon && styles.iconOptionSelected]}
+                onPress={() => handleSelectIcon(icon)}
+              >
+                <GroceryStoreIcon icon={icon} size={20} color={currentIcon === icon ? colors.white : colors.textMuted} />
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </BottomSheetModal>
     </View>
