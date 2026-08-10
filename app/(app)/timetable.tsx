@@ -37,6 +37,10 @@ const SWIPE_DISTANCE_THRESHOLD = 60;
 
 type WeekMode = "full" | "work";
 
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 export default function TimetableScreen() {
   const { t } = useTranslation();
   const DAY_LABELS = weekdaysShortMonFirst();
@@ -132,6 +136,10 @@ export default function TimetableScreen() {
     const next = new Date(weekAnchor);
     next.setDate(next.getDate() + dir * 7);
     setWeekAnchor(next);
+  }
+
+  function goToToday() {
+    setWeekAnchor(new Date());
   }
 
   function handleSwipeStateChange(event: PanGestureHandlerStateChangeEvent) {
@@ -276,9 +284,14 @@ export default function TimetableScreen() {
         <TouchableOpacity onPress={() => navigateWeek(-1)} style={styles.navButton}>
           <Text style={styles.navButtonText}>‹</Text>
         </TouchableOpacity>
-        <Text style={styles.navLabel}>
-          {t("timetable.weekOf", { date: formatDate(weekStart, { month: "short", day: "numeric" }) })}
-        </Text>
+        <View style={styles.navCenter}>
+          <Text style={styles.navLabel}>
+            {t("timetable.weekOf", { date: formatDate(weekStart, { month: "short", day: "numeric" }) })}
+          </Text>
+          <TouchableOpacity style={styles.todayButton} onPress={goToToday}>
+            <Text style={styles.todayButtonText}>{t("calendar.today")}</Text>
+          </TouchableOpacity>
+        </View>
         <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton}>
           <Text style={styles.navButtonText}>›</Text>
         </TouchableOpacity>
@@ -304,7 +317,9 @@ export default function TimetableScreen() {
         {days.map((day, i) => (
           <View key={i} style={styles.dayHeaderCell}>
             <Text style={styles.dayHeaderInitial}>{DAY_LABELS[i]}</Text>
-            <Text style={styles.dayHeaderNumber}>{day.getDate()}</Text>
+            <Text style={[styles.dayHeaderNumber, isSameDay(day, new Date()) && styles.dayHeaderNumberToday]}>
+              {day.getDate()}
+            </Text>
           </View>
         ))}
       </View>
@@ -567,7 +582,16 @@ const styles = StyleSheet.create({
   },
   navButton: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   navButtonText: { fontSize: 20, fontWeight: "700", color: sectionColors.calendar },
+  navCenter: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   navLabel: { fontSize: 14, fontWeight: "700", color: colors.text },
+  todayButton: {
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: sectionColors.calendar,
+  },
+  todayButtonText: { fontSize: 11, fontWeight: "700", color: sectionColors.calendar },
   weekModeRow: {
     flexDirection: "row",
     justifyContent: "center",
@@ -593,6 +617,14 @@ const styles = StyleSheet.create({
   dayHeaderCell: { flex: 1, alignItems: "center" },
   dayHeaderInitial: { fontSize: 10, fontWeight: "700", color: colors.textFaint },
   dayHeaderNumber: { fontSize: 13, fontWeight: "700", color: colors.text },
+  dayHeaderNumberToday: {
+    borderWidth: 1.5,
+    borderColor: sectionColors.calendar,
+    borderRadius: radii.sm,
+    paddingHorizontal: 6,
+    color: sectionColors.calendar,
+    overflow: "hidden",
+  },
   scroll: { flex: 1 },
   gridRow: { flexDirection: "row", paddingHorizontal: spacing.sm },
   hourLabel: { fontSize: 10, color: colors.textFaint, transform: [{ translateY: -6 }] },
