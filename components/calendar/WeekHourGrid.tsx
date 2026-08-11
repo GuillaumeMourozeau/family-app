@@ -144,7 +144,7 @@ export function WeekHourGrid({ weekStart, occurrences, members, holidays, onNavi
           {days.map((day, i) => (
             <View key={i} style={styles.allDayCell}>
               {allDayOccurrences
-                .filter((occ) => occ.startAt.toDateString() === day.toDateString())
+                .filter((occ) => occ.startAt <= day && occ.endAt >= day)
                 .map((occ) => (
                   <TouchableOpacity
                     key={occ.key}

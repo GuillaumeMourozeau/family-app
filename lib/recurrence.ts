@@ -109,12 +109,16 @@ export function expandOccurrences<T extends RecurringEventLike>(
     const baseStart = new Date(event.start_at);
     const durationMs = new Date(event.end_at).getTime() - baseStart.getTime();
     if (!event.recurrence_freq) {
-      if (baseStart >= rangeStart && baseStart < rangeEnd) {
+      // Overlap test, not "starts within range" — a multi-day event that
+      // started before rangeStart but is still ongoing must still show up
+      // (e.g. an Aug 30 – Sep 2 trip shouldn't vanish once you're viewing September).
+      const eventEnd = new Date(baseStart.getTime() + durationMs);
+      if (baseStart < rangeEnd && eventEnd > rangeStart) {
         results.push({
           key: (event as unknown as { id: string }).id,
           event,
           startAt: baseStart,
-          endAt: new Date(baseStart.getTime() + durationMs),
+          endAt: eventEnd,
         });
       }
       continue;
@@ -129,7 +133,11 @@ export function expandOccurrences<T extends RecurringEventLike>(
       count: event.recurrence_count,
     };
 
-    const dates = generateOccurrenceDates(baseStart, rule, rangeStart, rangeEnd);
+    // Widen the query window backward by the event's duration so a
+    // multi-day recurring occurrence that started just before rangeStart,
+    // but still overlaps it, isn't missed either.
+    const queryStart = new Date(rangeStart.getTime() - durationMs);
+    const dates = generateOccurrenceDates(baseStart, rule, queryStart, rangeEnd);
     const id = (event as unknown as { id: string }).id;
     dates.forEach((date, index) => {
       results.push({

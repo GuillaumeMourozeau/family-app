@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
+import { toDateKey } from "@/lib/dateUtils";
 
 export type TimetableBlock = {
   id: string;
@@ -71,17 +72,23 @@ export function useTimetable() {
     endTime: string;
     label: string;
   }) {
-    if (!familyId || !profile || input.daysOfWeek.length === 0) return;
-    await supabase.from("timetable_blocks").insert({
-      family_id: familyId,
-      profile_id: input.appliesToWholeFamily ? null : input.profileId,
-      applies_to_whole_family: input.appliesToWholeFamily,
-      days_of_week: input.daysOfWeek,
-      start_time: input.startTime,
-      end_time: input.endTime,
-      label: input.label,
-      created_by: profile.id,
-    });
+    if (!familyId || !profile || input.daysOfWeek.length === 0) return null;
+    const { data, error } = await supabase
+      .from("timetable_blocks")
+      .insert({
+        family_id: familyId,
+        profile_id: input.appliesToWholeFamily ? null : input.profileId,
+        applies_to_whole_family: input.appliesToWholeFamily,
+        days_of_week: input.daysOfWeek,
+        start_time: input.startTime,
+        end_time: input.endTime,
+        label: input.label,
+        created_by: profile.id,
+      })
+      .select()
+      .single();
+    if (error || !data) return null;
+    return data as TimetableBlock;
   }
 
   async function updateBlock(
@@ -128,5 +135,55 @@ export function useTimetable() {
     await supabase.from("timetable_overrides").delete().eq("block_id", blockId).eq("override_date", date);
   }
 
-  return { blocks, overrides, isLoading, addBlock, updateBlock, deleteBlock, setOverride, clearOverride, refetch };
+  // Cancels every occurrence of a block's usual days within [startDate, endDate]
+  // in one shot — e.g. skip a work schedule for the weeks of a holiday, without
+  // deleting the schedule or cancelling each day one at a time.
+  async function cleanWeeks(blockId: string, daysOfWeek: number[], startDate: Date, endDate: Date) {
+    const rows: {
+      block_id: string;
+      override_date: string;
+      is_cancelled: boolean;
+      start_time: null;
+      end_time: null;
+      label: null;
+    }[] = [];
+    const cursor = new Date(startDate);
+    cursor.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(0, 0, 0, 0);
+    while (cursor <= end) {
+      const jsDay = cursor.getDay();
+      const monFirstDay = jsDay === 0 ? 6 : jsDay - 1;
+      if (daysOfWeek.includes(monFirstDay)) {
+        rows.push({
+          block_id: blockId,
+          override_date: toDateKey(cursor),
+          is_cancelled: true,
+          start_time: null,
+          end_time: null,
+          label: null,
+        });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    if (rows.length === 0) return;
+    const { error } = await supabase
+      .from("timetable_overrides")
+      .upsert(rows, { onConflict: "block_id,override_date" });
+    if (error) return;
+    refetch();
+  }
+
+  return {
+    blocks,
+    overrides,
+    isLoading,
+    addBlock,
+    updateBlock,
+    deleteBlock,
+    setOverride,
+    clearOverride,
+    cleanWeeks,
+    refetch,
+  };
 }

@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { useTimetable } from "@/hooks/useTimetable";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
 import { usePinchZoom } from "@/hooks/usePinchZoom";
+import { useSwipeNavigate } from "@/hooks/useSwipeNavigate";
 import { formatDate, startOfWeek } from "@/lib/dateUtils";
 import { weekdaysShortMonFirst } from "@/lib/weekdayLabels";
 import {
@@ -25,6 +26,7 @@ import { FieldLabel } from "@/components/FieldLabel";
 import { Chip } from "@/components/Chip";
 import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
+import { TimetableMonthGrid } from "@/components/calendar/TimetableMonthGrid";
 import { colors, radii, sectionColors, sectionTints, spacing } from "@/lib/theme";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -36,6 +38,7 @@ const DEFAULT_START_HOUR = 8;
 const SWIPE_DISTANCE_THRESHOLD = 60;
 
 type WeekMode = "full" | "work";
+type ViewMode = "week" | "month";
 
 function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -44,13 +47,15 @@ function isSameDay(a: Date, b: Date): boolean {
 export default function TimetableScreen() {
   const { t } = useTranslation();
   const DAY_LABELS = weekdaysShortMonFirst();
-  const { blocks, overrides, addBlock, updateBlock, deleteBlock, setOverride, clearOverride } = useTimetable();
+  const { blocks, overrides, addBlock, updateBlock, deleteBlock, setOverride, clearOverride, cleanWeeks } = useTimetable();
   const { members } = useFamilyMembers();
   const scrollRef = useRef<ScrollView>(null);
   const pinchRef = useRef(null);
   const panRef = useRef(null);
 
+  const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [weekAnchor, setWeekAnchor] = useState(new Date());
+  const [monthAnchor, setMonthAnchor] = useState(new Date());
   const [memberFilter, setMemberFilter] = useState<string | null>(null);
   const [weekMode, setWeekMode] = useState<WeekMode>("full");
   const { value: hourHeight, onGestureEvent, onHandlerStateChange } = usePinchZoom(
@@ -89,6 +94,7 @@ export default function TimetableScreen() {
   const [newLabel, setNewLabel] = useState("");
   const [showNewStartPicker, setShowNewStartPicker] = useState(false);
   const [showNewEndPicker, setShowNewEndPicker] = useState(false);
+  const [newCleanRange, setNewCleanRange] = useState<{ start: Date; end: Date } | null>(null);
 
   const [editingOccurrence, setEditingOccurrence] = useState<TimetableOccurrence | null>(null);
   const [editScope, setEditScope] = useState<"day" | "series">("day");
@@ -98,6 +104,12 @@ export default function TimetableScreen() {
   const [editDaysOfWeek, setEditDaysOfWeek] = useState<number[]>([]);
   const [showEditStartPicker, setShowEditStartPicker] = useState(false);
   const [showEditEndPicker, setShowEditEndPicker] = useState(false);
+
+  const [cleaningWeeksFor, setCleaningWeeksFor] = useState<"new" | "edit" | null>(null);
+  const [cleanRangeStart, setCleanRangeStart] = useState(() => new Date());
+  const [cleanRangeEnd, setCleanRangeEnd] = useState(() => new Date());
+  const [showCleanStartPicker, setShowCleanStartPicker] = useState(false);
+  const [showCleanEndPicker, setShowCleanEndPicker] = useState(false);
 
   const weekStart = useMemo(() => startOfWeek(weekAnchor), [weekAnchor]);
   const dayCount = weekMode === "work" ? 5 : 7;
@@ -138,8 +150,16 @@ export default function TimetableScreen() {
     setWeekAnchor(next);
   }
 
+  function navigateMonth(dir: -1 | 1) {
+    const next = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + dir, 1);
+    setMonthAnchor(next);
+  }
+  const monthSwipeHandlers = useSwipeNavigate(navigateMonth);
+
   function goToToday() {
-    setWeekAnchor(new Date());
+    const now = new Date();
+    setWeekAnchor(now);
+    setMonthAnchor(now);
   }
 
   function handleSwipeStateChange(event: PanGestureHandlerStateChangeEvent) {
@@ -149,14 +169,22 @@ export default function TimetableScreen() {
     navigateWeek(translationX < 0 ? 1 : -1);
   }
 
-  function openAddBlock() {
+  function openAddBlock(daysOfWeek: number[] = [0]) {
     setNewMemberId(members[0]?.id ?? null);
     setNewAppliesToWholeFamily(false);
-    setNewDaysOfWeek([0]);
+    setNewDaysOfWeek(daysOfWeek);
     setNewStart(timeStringToDate("09:00"));
     setNewEnd(timeStringToDate("17:00"));
     setNewLabel("");
+    setNewCleanRange(null);
     setIsAdding(true);
+  }
+
+  // Tapping a day in month view: pre-select that weekday for the new block.
+  function openAddBlockForDay(day: Date) {
+    const jsDay = day.getDay();
+    const monFirstDay = jsDay === 0 ? 6 : jsDay - 1;
+    openAddBlock([monFirstDay]);
   }
 
   function toggleNewDay(day: number) {
@@ -165,7 +193,7 @@ export default function TimetableScreen() {
 
   async function handleSaveNewBlock() {
     if ((!newAppliesToWholeFamily && !newMemberId) || newDaysOfWeek.length === 0) return;
-    await addBlock({
+    const newBlock = await addBlock({
       profileId: newMemberId,
       appliesToWholeFamily: newAppliesToWholeFamily,
       daysOfWeek: newDaysOfWeek,
@@ -173,7 +201,31 @@ export default function TimetableScreen() {
       endTime: dateToTimeString(newEnd),
       label: newLabel.trim(),
     });
+    if (newBlock && newCleanRange) {
+      await cleanWeeks(newBlock.id, newDaysOfWeek, newCleanRange.start, newCleanRange.end);
+    }
     setIsAdding(false);
+  }
+
+  function openCleanWeeks(target: "new" | "edit") {
+    const start = new Date();
+    const end = new Date();
+    end.setDate(end.getDate() + 13);
+    setCleanRangeStart(start);
+    setCleanRangeEnd(end);
+    setCleaningWeeksFor(target);
+  }
+
+  async function handleConfirmCleanWeeks() {
+    if (cleaningWeeksFor === "new") {
+      setNewCleanRange({ start: cleanRangeStart, end: cleanRangeEnd });
+    } else if (cleaningWeeksFor === "edit" && editingOccurrence) {
+      const block = blocks.find((b) => b.id === editingOccurrence.blockId);
+      if (block) {
+        await cleanWeeks(block.id, block.days_of_week, cleanRangeStart, cleanRangeEnd);
+      }
+    }
+    setCleaningWeeksFor(null);
   }
 
   function openEditOccurrence(occ: TimetableOccurrence) {
@@ -262,7 +314,7 @@ export default function TimetableScreen() {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t("timetable.title")}</Text>
-        <TouchableOpacity onPress={openAddBlock}>
+        <TouchableOpacity onPress={() => openAddBlock()}>
           <Ionicons name="add-circle" size={26} color={sectionColors.calendar} />
         </TouchableOpacity>
       </View>
@@ -281,126 +333,164 @@ export default function TimetableScreen() {
       </View>
 
       <View style={styles.navRow}>
-        <TouchableOpacity onPress={() => navigateWeek(-1)} style={styles.navButton}>
-          <Text style={styles.navButtonText}>‹</Text>
-        </TouchableOpacity>
         <View style={styles.navCenter}>
+          <TouchableOpacity onPress={() => (viewMode === "week" ? navigateWeek(-1) : navigateMonth(-1))} style={styles.navButton}>
+            <Text style={styles.navButtonText}>‹</Text>
+          </TouchableOpacity>
           <Text style={styles.navLabel}>
-            {t("timetable.weekOf", { date: formatDate(weekStart, { month: "short", day: "numeric" }) })}
+            {viewMode === "week"
+              ? t("timetable.weekOf", { date: formatDate(weekStart, { month: "short", day: "numeric" }) })
+              : formatDate(monthAnchor, { month: "long", year: "numeric" })}
           </Text>
-          <TouchableOpacity style={styles.todayButton} onPress={goToToday}>
-            <Text style={styles.todayButtonText}>{t("calendar.today")}</Text>
+          <TouchableOpacity onPress={() => (viewMode === "week" ? navigateWeek(1) : navigateMonth(1))} style={styles.navButton}>
+            <Text style={styles.navButtonText}>›</Text>
           </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton}>
-          <Text style={styles.navButtonText}>›</Text>
+        <TouchableOpacity style={styles.todayButton} onPress={goToToday}>
+          <Text style={styles.todayButtonText}>{t("calendar.today")}</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.weekModeRow}>
         <TouchableOpacity
-          style={[styles.weekModeButton, weekMode === "full" && styles.weekModeButtonActive]}
-          onPress={() => setWeekMode("full")}
+          style={[styles.weekModeButton, viewMode === "week" && weekMode === "full" && styles.weekModeButtonActive]}
+          onPress={() => {
+            setViewMode("week");
+            setWeekMode("full");
+          }}
         >
-          <Text style={[styles.weekModeText, weekMode === "full" && styles.weekModeTextActive]}>{t("calendar.fullWeek")}</Text>
+          <Text style={[styles.weekModeText, viewMode === "week" && weekMode === "full" && styles.weekModeTextActive]}>
+            {t("calendar.fullWeek")}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.weekModeButton, weekMode === "work" && styles.weekModeButtonActive]}
-          onPress={() => setWeekMode("work")}
+          style={[styles.weekModeButton, viewMode === "week" && weekMode === "work" && styles.weekModeButtonActive]}
+          onPress={() => {
+            setViewMode("week");
+            setWeekMode("work");
+          }}
         >
-          <Text style={[styles.weekModeText, weekMode === "work" && styles.weekModeTextActive]}>{t("calendar.workWeek")}</Text>
+          <Text style={[styles.weekModeText, viewMode === "week" && weekMode === "work" && styles.weekModeTextActive]}>
+            {t("calendar.workWeek")}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.weekModeButton, viewMode === "month" && styles.weekModeButtonActive]}
+          onPress={() => setViewMode("month")}
+        >
+          <Text style={[styles.weekModeText, viewMode === "month" && styles.weekModeTextActive]}>{t("calendar.viewMonth")}</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.dayHeaderRow}>
-        <View style={{ width: GUTTER_WIDTH }} />
-        {days.map((day, i) => (
-          <View key={i} style={styles.dayHeaderCell}>
-            <Text style={styles.dayHeaderInitial}>{DAY_LABELS[i]}</Text>
-            <Text style={[styles.dayHeaderNumber, isSameDay(day, new Date()) && styles.dayHeaderNumberToday]}>
-              {day.getDate()}
-            </Text>
+      {viewMode === "week" && (
+        <>
+          <View style={styles.dayHeaderRow}>
+            <View style={{ width: GUTTER_WIDTH }} />
+            {days.map((day, i) => (
+              <View key={i} style={styles.dayHeaderCell}>
+                <Text style={styles.dayHeaderInitial}>{DAY_LABELS[i]}</Text>
+                <Text style={[styles.dayHeaderNumber, isSameDay(day, new Date()) && styles.dayHeaderNumberToday]}>
+                  {day.getDate()}
+                </Text>
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
 
-      <PanGestureHandler
-        ref={panRef}
-        onHandlerStateChange={handleSwipeStateChange}
-        activeOffsetX={[-20, 20]}
-        failOffsetY={[-15, 15]}
-        simultaneousHandlers={[pinchRef, scrollRef]}
-      >
-      <PinchGestureHandler
-        ref={pinchRef}
-        onGestureEvent={onGestureEvent}
-        onHandlerStateChange={onHandlerStateChange}
-        simultaneousHandlers={[scrollRef, panRef]}
-      >
-        <ScrollView
-          ref={scrollRef}
-          style={styles.scroll}
-          showsVerticalScrollIndicator={false}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-        >
-          <View style={styles.gridRow}>
-            <View style={{ width: GUTTER_WIDTH }}>
-              {HOURS.map((h) => (
-                <View key={h} style={{ height: hourHeight, alignItems: "flex-end", paddingRight: 3 }}>
-                  <Text style={styles.hourLabel}>{h === 0 ? "" : `${h}h`}</Text>
-                </View>
-              ))}
-            </View>
-            {days.map((_, dayIndex) => {
-              const dayOccurrences = occurrencesByDay.get(dayIndex) ?? [];
-              return (
-                <View key={dayIndex} style={styles.dayColumn}>
+          <PanGestureHandler
+            ref={panRef}
+            onHandlerStateChange={handleSwipeStateChange}
+            activeOffsetX={[-20, 20]}
+            failOffsetY={[-15, 15]}
+            simultaneousHandlers={[pinchRef, scrollRef]}
+          >
+          <PinchGestureHandler
+            ref={pinchRef}
+            onGestureEvent={onGestureEvent}
+            onHandlerStateChange={onHandlerStateChange}
+            simultaneousHandlers={[scrollRef, panRef]}
+          >
+            <ScrollView
+              ref={scrollRef}
+              style={styles.scroll}
+              showsVerticalScrollIndicator={false}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+            >
+              <View style={styles.gridRow}>
+                <View style={{ width: GUTTER_WIDTH }}>
                   {HOURS.map((h) => (
-                    <View key={h} style={[styles.hourCell, { height: hourHeight }]} />
+                    <View key={h} style={{ height: hourHeight, alignItems: "flex-end", paddingRight: 3 }}>
+                      <Text style={styles.hourLabel}>{h === 0 ? "" : `${h}h`}</Text>
+                    </View>
                   ))}
-                  {dayOccurrences.map((occ, i) => {
-                    const top = (minutesFromMidnight(occ.startTime) / 60) * hourHeight;
-                    const height = Math.max(
-                      18,
-                      ((minutesFromMidnight(occ.endTime) - minutesFromMidnight(occ.startTime)) / 60) * hourHeight
-                    );
-                    const width = 100 / dayOccurrences.length;
-                    const member = occ.appliesToWholeFamily ? null : members.find((m) => m.id === occ.profileId);
-                    const color = occ.appliesToWholeFamily ? NEUTRAL_COLOR : member ? getMemberColor(member) : NEUTRAL_COLOR;
-                    return (
-                      <TouchableOpacity
-                        key={occ.key}
-                        style={[
-                          styles.block,
-                          {
-                            top,
-                            height,
-                            left: `${width * i}%`,
-                            width: `${width}%`,
-                            backgroundColor: color,
-                          },
-                        ]}
-                        onPress={() => openEditOccurrence(occ)}
-                      >
-                        <Text style={styles.blockText} numberOfLines={1}>
-                          {occ.appliesToWholeFamily ? t("common.wholeFamily") : member?.full_name ?? t("common.member")}
-                        </Text>
-                        {occ.label ? (
-                          <Text style={styles.blockSubtext} numberOfLines={1}>
-                            {occ.label}
-                          </Text>
-                        ) : null}
-                      </TouchableOpacity>
-                    );
-                  })}
                 </View>
-              );
-            })}
-          </View>
-        </ScrollView>
-      </PinchGestureHandler>
-      </PanGestureHandler>
+                {days.map((_, dayIndex) => {
+                  const dayOccurrences = occurrencesByDay.get(dayIndex) ?? [];
+                  return (
+                    <View key={dayIndex} style={styles.dayColumn}>
+                      {HOURS.map((h) => (
+                        <View key={h} style={[styles.hourCell, { height: hourHeight }]} />
+                      ))}
+                      {dayOccurrences.map((occ, i) => {
+                        const top = (minutesFromMidnight(occ.startTime) / 60) * hourHeight;
+                        const height = Math.max(
+                          18,
+                          ((minutesFromMidnight(occ.endTime) - minutesFromMidnight(occ.startTime)) / 60) * hourHeight
+                        );
+                        const width = 100 / dayOccurrences.length;
+                        const member = occ.appliesToWholeFamily ? null : members.find((m) => m.id === occ.profileId);
+                        const color = occ.appliesToWholeFamily ? NEUTRAL_COLOR : member ? getMemberColor(member) : NEUTRAL_COLOR;
+                        return (
+                          <TouchableOpacity
+                            key={occ.key}
+                            style={[
+                              styles.block,
+                              {
+                                top,
+                                height,
+                                left: `${width * i}%`,
+                                width: `${width}%`,
+                                backgroundColor: color,
+                              },
+                            ]}
+                            onPress={() => openEditOccurrence(occ)}
+                          >
+                            <Text style={styles.blockText} numberOfLines={1}>
+                              {occ.appliesToWholeFamily ? t("common.wholeFamily") : member?.full_name ?? t("common.member")}
+                            </Text>
+                            {occ.label ? (
+                              <Text style={styles.blockSubtext} numberOfLines={1}>
+                                {occ.label}
+                              </Text>
+                            ) : null}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </PinchGestureHandler>
+          </PanGestureHandler>
+        </>
+      )}
+
+      {viewMode === "month" && (
+        <View style={styles.flex} {...monthSwipeHandlers}>
+          <ScrollView style={styles.flex} contentContainerStyle={styles.monthContent}>
+            <TimetableMonthGrid
+              monthAnchor={monthAnchor}
+              blocks={blocks}
+              overrides={overrides}
+              members={members}
+              memberFilter={memberFilter}
+              onSelectDay={openAddBlockForDay}
+              onSelectOccurrence={openEditOccurrence}
+            />
+          </ScrollView>
+        </View>
+      )}
 
       <BottomSheetModal visible={isAdding} onClose={() => setIsAdding(false)}>
         <ModalTitle icon="time" tint={sectionColors.calendar} tintBackground={sectionTints.calendar} title={t("timetable.newBlock")} />
@@ -476,6 +566,25 @@ export default function TimetableScreen() {
         <FieldLabel icon="pricetag-outline" label={t("timetable.labelOptional")} />
         <TextField placeholder={t("timetable.labelPlaceholder")} value={newLabel} onChangeText={setNewLabel} />
 
+        {newCleanRange ? (
+          <View style={styles.cleanSummaryRow}>
+            <Ionicons name="airplane-outline" size={14} color={sectionColors.calendar} />
+            <Text style={styles.cleanSummaryText}>
+              {t("timetable.cleaningWeeksLabel", {
+                range: `${formatDate(newCleanRange.start, { month: "short", day: "numeric" })} – ${formatDate(newCleanRange.end, { month: "short", day: "numeric" })}`,
+              })}
+            </Text>
+            <TouchableOpacity onPress={() => setNewCleanRange(null)}>
+              <Text style={styles.clearCleanLink}>{t("timetable.clearCleanRange")}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.cleanWeeksLink} onPress={() => openCleanWeeks("new")}>
+            <Ionicons name="airplane-outline" size={14} color={sectionColors.calendar} />
+            <Text style={styles.cleanWeeksLinkText}>{t("timetable.cleanWeeksAction")}</Text>
+          </TouchableOpacity>
+        )}
+
         <Button label={t("common.add")} onPress={handleSaveNewBlock} style={[styles.submitButton, { backgroundColor: sectionColors.calendar }]} />
       </BottomSheetModal>
 
@@ -542,6 +651,12 @@ export default function TimetableScreen() {
         <TextField placeholder={t("timetable.labelPlaceholder")} value={editLabel} onChangeText={setEditLabel} />
 
         <Button label={t("common.save")} onPress={handleSaveEdit} style={[styles.submitButton, { backgroundColor: sectionColors.calendar }]} />
+
+        <TouchableOpacity style={styles.cleanWeeksLink} onPress={() => openCleanWeeks("edit")}>
+          <Ionicons name="airplane-outline" size={14} color={sectionColors.calendar} />
+          <Text style={styles.cleanWeeksLinkText}>{t("timetable.cleanWeeksAction")}</Text>
+        </TouchableOpacity>
+
         {editingOccurrence?.isOverridden && editScope === "day" && (
           <TouchableOpacity onPress={handleRevertOverride} style={styles.revertLink}>
             <Text style={styles.revertLinkText}>{t("timetable.revertDay")}</Text>
@@ -550,6 +665,54 @@ export default function TimetableScreen() {
         <TouchableOpacity onPress={handleDeleteEdit} style={styles.deleteLinkRow}>
           <Text style={styles.deleteLinkText}>{editScope === "day" ? t("timetable.removeThisDay") : t("timetable.deleteWholeSchedule")}</Text>
         </TouchableOpacity>
+      </BottomSheetModal>
+
+      <BottomSheetModal visible={cleaningWeeksFor !== null} onClose={() => setCleaningWeeksFor(null)}>
+        <ModalTitle icon="airplane" tint={sectionColors.calendar} tintBackground={sectionTints.calendar} title={t("timetable.cleanWeeksTitle")} />
+        <Text style={styles.cleanWeeksHint}>{t("timetable.cleanWeeksHint")}</Text>
+
+        <FieldLabel icon="calendar-outline" label={t("timetable.cleanWeeksFrom")} />
+        <TouchableOpacity style={styles.dateButton} onPress={() => setShowCleanStartPicker(true)}>
+          <Ionicons name="calendar-outline" size={15} color={sectionColors.calendar} />
+          <Text style={styles.dateButtonText}>{formatDate(cleanRangeStart)}</Text>
+        </TouchableOpacity>
+        {showCleanStartPicker && (
+          <DateTimePicker
+            value={cleanRangeStart}
+            mode="date"
+            display="default"
+            onChange={(_, selected) => {
+              setShowCleanStartPicker(false);
+              if (selected) {
+                setCleanRangeStart(selected);
+                if (cleanRangeEnd < selected) setCleanRangeEnd(selected);
+              }
+            }}
+          />
+        )}
+
+        <FieldLabel icon="calendar-outline" label={t("timetable.cleanWeeksTo")} />
+        <TouchableOpacity style={styles.dateButton} onPress={() => setShowCleanEndPicker(true)}>
+          <Ionicons name="calendar-outline" size={15} color={sectionColors.calendar} />
+          <Text style={styles.dateButtonText}>{formatDate(cleanRangeEnd)}</Text>
+        </TouchableOpacity>
+        {showCleanEndPicker && (
+          <DateTimePicker
+            value={cleanRangeEnd}
+            mode="date"
+            display="default"
+            onChange={(_, selected) => {
+              setShowCleanEndPicker(false);
+              if (selected && selected >= cleanRangeStart) setCleanRangeEnd(selected);
+            }}
+          />
+        )}
+
+        <Button
+          label={t("timetable.cleanWeeksConfirm")}
+          onPress={handleConfirmCleanWeeks}
+          style={[styles.submitButton, { backgroundColor: sectionColors.calendar }]}
+        />
       </BottomSheetModal>
     </View>
   );
@@ -573,16 +736,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
   },
+  flex: { flex: 1 },
+  monthContent: { paddingBottom: 40 },
   navRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.md,
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
   },
   navButton: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   navButtonText: { fontSize: 20, fontWeight: "700", color: sectionColors.calendar },
-  navCenter: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  navCenter: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.md },
   navLabel: { fontSize: 14, fontWeight: "700", color: colors.text },
   todayButton: {
     paddingHorizontal: spacing.sm + 2,
@@ -658,4 +823,25 @@ const styles = StyleSheet.create({
   revertLinkText: { color: colors.textMuted, fontSize: 13, fontWeight: "600" },
   deleteLinkRow: { marginTop: spacing.sm, alignItems: "center" },
   deleteLinkText: { color: colors.danger, fontSize: 13, fontWeight: "700" },
+  cleanWeeksLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  cleanWeeksLinkText: { color: sectionColors.calendar, fontSize: 13, fontWeight: "700" },
+  cleanWeeksHint: { fontSize: 13, color: colors.textMuted, marginTop: spacing.xs, marginBottom: spacing.sm },
+  cleanSummaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: sectionTints.calendar,
+  },
+  cleanSummaryText: { flex: 1, fontSize: 12, fontWeight: "600", color: colors.text },
+  clearCleanLink: { fontSize: 12, fontWeight: "700", color: colors.danger },
 });
