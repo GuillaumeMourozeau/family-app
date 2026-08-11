@@ -81,6 +81,7 @@ export function generateOccurrenceDates(
 
 export type RecurringEventLike = {
   start_at: string;
+  end_at: string;
   recurrence_freq: RecurrenceFreq | null;
   recurrence_interval: number;
   recurrence_days_of_week: number[] | null;
@@ -93,6 +94,7 @@ export type Occurrence<T extends RecurringEventLike> = {
   key: string;
   event: T;
   startAt: Date;
+  endAt: Date;
 };
 
 // Expands every event in the list into its concrete occurrences within
@@ -105,9 +107,15 @@ export function expandOccurrences<T extends RecurringEventLike>(
   const results: Occurrence<T>[] = [];
   for (const event of events) {
     const baseStart = new Date(event.start_at);
+    const durationMs = new Date(event.end_at).getTime() - baseStart.getTime();
     if (!event.recurrence_freq) {
       if (baseStart >= rangeStart && baseStart < rangeEnd) {
-        results.push({ key: (event as unknown as { id: string }).id, event, startAt: baseStart });
+        results.push({
+          key: (event as unknown as { id: string }).id,
+          event,
+          startAt: baseStart,
+          endAt: new Date(baseStart.getTime() + durationMs),
+        });
       }
       continue;
     }
@@ -124,7 +132,12 @@ export function expandOccurrences<T extends RecurringEventLike>(
     const dates = generateOccurrenceDates(baseStart, rule, rangeStart, rangeEnd);
     const id = (event as unknown as { id: string }).id;
     dates.forEach((date, index) => {
-      results.push({ key: date.getTime() === baseStart.getTime() ? id : `${id}__${index}__${date.getTime()}`, event, startAt: date });
+      results.push({
+        key: date.getTime() === baseStart.getTime() ? id : `${id}__${index}__${date.getTime()}`,
+        event,
+        startAt: date,
+        endAt: new Date(date.getTime() + durationMs),
+      });
     });
   }
   return results.sort((a, b) => a.startAt.getTime() - b.startAt.getTime());

@@ -27,9 +27,10 @@ type Props = {
   members: FamilyMember[];
   holidays: HolidayMarker[];
   onNavigate: (direction: -1 | 1) => void;
+  onSlotPress: (slotStart: Date) => void;
 };
 
-export function WeekHourGrid({ weekStart, occurrences, members, holidays, onNavigate }: Props) {
+export function WeekHourGrid({ weekStart, occurrences, members, holidays, onNavigate, onSlotPress }: Props) {
   const { t } = useTranslation();
   const dayInitials = weekdaysShortMonFirst();
   const scrollRef = useRef<ScrollView>(null);
@@ -186,18 +187,28 @@ export function WeekHourGrid({ weekStart, occurrences, members, holidays, onNavi
             {days.map((day, dayIndex) => (
               <View key={dayIndex} style={styles.dayColumn}>
                 {HOURS.map((h) => (
-                  <View key={h} style={[styles.hourCell, { height: hourHeight }]} />
+                  <TouchableOpacity
+                    key={h}
+                    style={[styles.hourCell, { height: hourHeight }]}
+                    onPress={() => {
+                      const slotStart = new Date(day);
+                      slotStart.setHours(h, 0, 0, 0);
+                      onSlotPress(slotStart);
+                    }}
+                  />
                 ))}
                 {timedOccurrences
                   .filter((occ) => occ.startAt.toDateString() === day.toDateString())
                   .map((occ) => {
-                    const minutesFromMidnight = occ.startAt.getHours() * 60 + occ.startAt.getMinutes();
-                    const top = (minutesFromMidnight / 60) * hourHeight;
+                    const startMinutes = occ.startAt.getHours() * 60 + occ.startAt.getMinutes();
+                    const endMinutes = Math.min(24 * 60, (occ.endAt.getTime() - occ.startAt.getTime()) / 60000 + startMinutes);
+                    const top = (startMinutes / 60) * hourHeight;
+                    const height = Math.max(18, ((endMinutes - startMinutes) / 60) * hourHeight - 2);
                     const dotColor = getEventDotColors(occ.event, members)[0] ?? sectionColors.calendar;
                     return (
                       <TouchableOpacity
                         key={occ.key}
-                        style={[styles.eventBlock, { top, height: hourHeight - 4, backgroundColor: dotColor }]}
+                        style={[styles.eventBlock, { top, height, backgroundColor: dotColor }]}
                         onPress={() => router.push(`/event/${occ.event.id}`)}
                       >
                         <Text style={styles.eventBlockText} numberOfLines={2}>

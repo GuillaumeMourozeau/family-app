@@ -2,12 +2,11 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, SectionList, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { useTranslation } from "react-i18next";
 import { useEvents, type CalendarEvent, type RecurrenceInput } from "@/hooks/useEvents";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
 import { useCalendarPrefs } from "@/hooks/useCalendarPrefs";
-import { formatDate, formatTime, isThisWeek, startOfWeek } from "@/lib/dateUtils";
+import { formatDate, isThisWeek, startOfWeek } from "@/lib/dateUtils";
 import { expandOccurrences } from "@/lib/recurrence";
 import { getHolidayMarkers } from "@/lib/holidayMarkers";
 import { getMemberColor, NEUTRAL_COLOR } from "@/lib/memberColors";
@@ -23,7 +22,7 @@ import { RecurrencePicker } from "@/components/RecurrencePicker";
 import { EventReminderPicker } from "@/components/EventReminderPicker";
 import { ForWhoPicker } from "@/components/calendar/ForWhoPicker";
 import { EventRow } from "@/components/calendar/EventRow";
-import { DayAgenda } from "@/components/calendar/DayAgenda";
+import { EventDateRangePicker } from "@/components/calendar/EventDateRangePicker";
 import { WeekHourGrid } from "@/components/calendar/WeekHourGrid";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
 import { colors, radii, sectionColors, sectionTints, spacing } from "@/lib/theme";
@@ -47,15 +46,14 @@ export default function CalendarScreen() {
   const [isAdding, setIsAdding] = useState(false);
 
   const [title, setTitle] = useState("");
-  const [date, setDate] = useState(new Date());
+  const [startAt, setStartAt] = useState(new Date());
+  const [endAt, setEndAt] = useState(() => new Date(Date.now() + 60 * 60 * 1000));
   const [allDay, setAllDay] = useState(false);
   const [appliesToWholeFamily, setAppliesToWholeFamily] = useState(false);
   const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [isPrivate, setIsPrivate] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurrenceInput>(null);
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const [weekAnchor, setWeekAnchor] = useState(new Date());
   const [monthAnchor, setMonthAnchor] = useState(new Date());
@@ -104,14 +102,6 @@ export default function CalendarScreen() {
     [filteredEvents, monthGridRange]
   );
 
-  const selectedDayOccurrences = useMemo(() => {
-    const dayStart = startOfDay(selectedDay);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayEnd.getDate() + 1);
-    const source = viewMode === "month" ? monthOccurrences : weekOccurrences;
-    return source.filter((occ) => occ.startAt >= dayStart && occ.startAt < dayEnd);
-  }, [viewMode, monthOccurrences, weekOccurrences, selectedDay]);
-
   const holidayOptions = useMemo(
     () => ({
       showPublicHolidays: calendarPrefs.show_public_holidays,
@@ -129,10 +119,6 @@ export default function CalendarScreen() {
     () => getHolidayMarkers(monthGridRange.start, monthGridRange.end, holidayOptions),
     [monthGridRange, holidayOptions]
   );
-  const selectedDayHoliday = useMemo(() => {
-    const source = viewMode === "month" ? monthHolidays : weekHolidays;
-    return source.find((h) => h.date.toDateString() === selectedDay.toDateString());
-  }, [viewMode, monthHolidays, weekHolidays, selectedDay]);
 
   const sections = useMemo(() => {
     const byDate = new Map<string, typeof listOccurrences>();
@@ -177,10 +163,8 @@ export default function CalendarScreen() {
     setSelectedDay(now);
   }
 
-  function resetForm() {
+  function resetFormFields() {
     setTitle("");
-    setDate(new Date());
-    setAllDay(false);
     setAppliesToWholeFamily(false);
     setParticipantIds([]);
     setIsPrivate(false);
@@ -188,11 +172,46 @@ export default function CalendarScreen() {
     setReminderOffsets([]);
   }
 
+  function openAddEvent() {
+    resetFormFields();
+    const now = new Date();
+    setStartAt(now);
+    setEndAt(new Date(now.getTime() + 60 * 60 * 1000));
+    setAllDay(false);
+    setIsAdding(true);
+  }
+
+  // Tapping a day in month view: default to an all-day event on that day.
+  function openAddEventForDay(day: Date) {
+    resetFormFields();
+    const start = new Date(day);
+    start.setHours(0, 0, 0, 0);
+    setStartAt(start);
+    setEndAt(start);
+    setAllDay(true);
+    setIsAdding(true);
+  }
+
+  // Tapping an empty slot in week view: default to a 1-hour timed event there.
+  function openAddEventForSlot(slotStart: Date) {
+    resetFormFields();
+    setStartAt(slotStart);
+    setEndAt(new Date(slotStart.getTime() + 60 * 60 * 1000));
+    setAllDay(false);
+    setIsAdding(true);
+  }
+
+  function handleSelectDay(day: Date) {
+    setSelectedDay(day);
+    openAddEventForDay(day);
+  }
+
   async function handleAddEvent() {
     if (!title.trim()) return;
     await addEvent({
       title: title.trim(),
-      startAt: date,
+      startAt,
+      endAt,
       allDay,
       appliesToWholeFamily,
       participantIds,
@@ -200,7 +219,6 @@ export default function CalendarScreen() {
       recurrence,
       reminderOffsetsMinutes: reminderOffsets,
     });
-    resetForm();
     setIsAdding(false);
   }
 
@@ -220,7 +238,7 @@ export default function CalendarScreen() {
         tint={sectionColors.calendar}
         tintBackground={sectionTints.calendar}
         actionLabel={t("calendar.addEventAction")}
-        onAction={() => setIsAdding(true)}
+        onAction={openAddEvent}
         onIconPress={() => router.push("/calendar-settings")}
       />
 
@@ -297,28 +315,22 @@ export default function CalendarScreen() {
             members={members}
             holidays={weekHolidays}
             onNavigate={navigateWeek}
+            onSlotPress={openAddEventForSlot}
           />
         </View>
       )}
 
       {viewMode === "month" && (
         <View style={styles.flex} {...monthSwipeHandlers}>
-          <MonthGrid
-            monthAnchor={monthAnchor}
-            selectedDay={selectedDay}
-            occurrences={monthOccurrences}
-            members={members}
-            holidays={monthHolidays}
-            onSelectDay={setSelectedDay}
-            onNavigate={navigateMonth}
-          />
-          <ScrollView style={styles.flex} contentContainerStyle={styles.dayAgendaContent}>
-            <DayAgenda
-              date={selectedDay}
-              occurrences={selectedDayOccurrences}
+          <ScrollView style={styles.flex} contentContainerStyle={styles.monthContent}>
+            <MonthGrid
+              monthAnchor={monthAnchor}
+              selectedDay={selectedDay}
+              occurrences={monthOccurrences}
               members={members}
-              holiday={selectedDayHoliday}
-              onDeleteEvent={deleteEvent}
+              holidays={monthHolidays}
+              onSelectDay={handleSelectDay}
+              onNavigate={navigateMonth}
             />
           </ScrollView>
         </View>
@@ -333,55 +345,15 @@ export default function CalendarScreen() {
         <ModalTitle icon="calendar" tint={sectionColors.calendar} tintBackground={sectionTints.calendar} title={t("calendar.newEvent")} />
         <TextField placeholder={t("calendar.eventTitlePlaceholder")} value={title} onChangeText={setTitle} autoFocus />
 
-        <View style={styles.switchRow}>
-          <FieldLabel icon="sunny-outline" label={t("common.allDay")} />
-          <Switch value={allDay} onValueChange={setAllDay} trackColor={{ false: colors.border, true: sectionColors.calendar }} />
-        </View>
-
-        <View style={styles.dateRow}>
-          <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
-            <Ionicons name="calendar-outline" size={15} color={sectionColors.calendar} />
-            <Text style={styles.dateButtonText}>{formatDate(date)}</Text>
-          </TouchableOpacity>
-          {!allDay && (
-            <TouchableOpacity style={styles.dateButton} onPress={() => setShowTimePicker(true)}>
-              <Ionicons name="time-outline" size={15} color={sectionColors.calendar} />
-              <Text style={styles.dateButtonText}>
-                {formatTime(date, { hour: "2-digit", minute: "2-digit" })}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        {showDatePicker && (
-          <DateTimePicker
-            value={date}
-            mode="date"
-            display="default"
-            onChange={(_, selected) => {
-              setShowDatePicker(false);
-              if (selected) {
-                const next = new Date(date);
-                next.setFullYear(selected.getFullYear(), selected.getMonth(), selected.getDate());
-                setDate(next);
-              }
-            }}
-          />
-        )}
-        {showTimePicker && (
-          <DateTimePicker
-            value={date}
-            mode="time"
-            display="default"
-            onChange={(_, selected) => {
-              setShowTimePicker(false);
-              if (selected) {
-                const next = new Date(date);
-                next.setHours(selected.getHours(), selected.getMinutes());
-                setDate(next);
-              }
-            }}
-          />
-        )}
+        <EventDateRangePicker
+          allDay={allDay}
+          onAllDayChange={setAllDay}
+          startAt={startAt}
+          endAt={endAt}
+          onStartAtChange={setStartAt}
+          onEndAtChange={setEndAt}
+          tint={sectionColors.calendar}
+        />
 
         <RecurrencePicker value={recurrence} onChange={setRecurrence} tint={sectionColors.calendar} />
 
@@ -413,7 +385,7 @@ export default function CalendarScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  dayAgendaContent: { paddingBottom: 40 },
+  monthContent: { paddingBottom: 40 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   listContent: { paddingBottom: 40 },
   viewSwitcherRow: {
@@ -488,18 +460,5 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 18, fontWeight: "700", color: colors.text, marginBottom: spacing.xs },
   label: { fontSize: 13, fontWeight: "600", color: colors.textMuted },
   switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.xs },
-  dateRow: { flexDirection: "row", gap: spacing.sm },
-  dateButton: {
-    flex: 1,
-    flexDirection: "row",
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dateButtonText: { fontSize: 15, fontWeight: "600", color: colors.text },
   submitButton: { marginTop: spacing.sm, backgroundColor: sectionColors.calendar },
 });

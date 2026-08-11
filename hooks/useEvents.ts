@@ -9,6 +9,7 @@ export type CalendarEvent = {
   description: string | null;
   location: string | null;
   start_at: string;
+  end_at: string;
   all_day: boolean;
   applies_to_whole_family: boolean;
   created_by: string;
@@ -102,6 +103,7 @@ export function useEvents() {
   async function addEvent(input: {
     title: string;
     startAt: Date;
+    endAt: Date;
     allDay: boolean;
     appliesToWholeFamily: boolean;
     participantIds: string[];
@@ -118,6 +120,7 @@ export function useEvents() {
         title: input.title,
         event_type: "general",
         start_at: input.startAt.toISOString(),
+        end_at: input.endAt.toISOString(),
         all_day: input.allDay,
         applies_to_whole_family: input.appliesToWholeFamily,
         created_by: profile.id,
@@ -142,6 +145,7 @@ export function useEvents() {
     input: {
       title: string;
       startAt: Date;
+      endAt: Date;
       allDay: boolean;
       appliesToWholeFamily: boolean;
       participantIds: string[];
@@ -157,6 +161,7 @@ export function useEvents() {
       .update({
         title: input.title,
         start_at: input.startAt.toISOString(),
+        end_at: input.endAt.toISOString(),
         all_day: input.allDay,
         applies_to_whole_family: input.appliesToWholeFamily,
         description: input.description,

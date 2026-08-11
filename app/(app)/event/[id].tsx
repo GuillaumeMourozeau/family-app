@@ -1,20 +1,19 @@
 import { useEffect, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useEvents, type RecurrenceInput } from "@/hooks/useEvents";
 import { useFamilyMembers } from "@/hooks/useFamilyMembers";
 import { useProfile } from "@/hooks/useProfile";
-import { formatDate, formatTime } from "@/lib/dateUtils";
 import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
 import { FieldLabel } from "@/components/FieldLabel";
 import { RecurrencePicker } from "@/components/RecurrencePicker";
 import { EventReminderPicker } from "@/components/EventReminderPicker";
 import { ForWhoPicker } from "@/components/calendar/ForWhoPicker";
-import { colors, radii, sectionColors, spacing } from "@/lib/theme";
+import { EventDateRangePicker } from "@/components/calendar/EventDateRangePicker";
+import { colors, sectionColors, spacing } from "@/lib/theme";
 
 export default function EventDetailScreen() {
   const { t } = useTranslation();
@@ -28,7 +27,8 @@ export default function EventDetailScreen() {
   const creator = event ? members.find((m) => m.id === event.created_by) : undefined;
 
   const [title, setTitle] = useState("");
-  const [date, setDate] = useState(new Date());
+  const [startAt, setStartAt] = useState(new Date());
+  const [endAt, setEndAt] = useState(new Date());
   const [allDay, setAllDay] = useState(false);
   const [appliesToWholeFamily, setAppliesToWholeFamily] = useState(true);
   const [participantIds, setParticipantIds] = useState<string[]>([]);
@@ -37,14 +37,13 @@ export default function EventDetailScreen() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurrenceInput>(null);
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([]);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!event) return;
     setTitle(event.title);
-    setDate(new Date(event.start_at));
+    setStartAt(new Date(event.start_at));
+    setEndAt(new Date(event.end_at));
     setAllDay(event.all_day);
     setAppliesToWholeFamily(event.applies_to_whole_family);
     setParticipantIds(event.participant_ids);
@@ -71,7 +70,8 @@ export default function EventDetailScreen() {
     setIsSaving(true);
     await updateEvent(event.id, {
       title: title.trim(),
-      startAt: date,
+      startAt,
+      endAt,
       allDay,
       appliesToWholeFamily,
       participantIds,
@@ -136,55 +136,15 @@ export default function EventDetailScreen() {
           {t("common.addedBy", { name: isCreator ? t("common.you") : creator?.full_name ?? t("common.aFamilyMember") })}
         </Text>
 
-        <View style={styles.switchRow}>
-          <FieldLabel icon="sunny-outline" label={t("common.allDay")} />
-          <Switch value={allDay} onValueChange={setAllDay} trackColor={{ false: colors.border, true: sectionColors.calendar }} />
-        </View>
-
-        <View style={styles.dateRow}>
-          <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
-            <Ionicons name="calendar-outline" size={15} color={sectionColors.calendar} />
-            <Text style={styles.dateButtonText}>{formatDate(date)}</Text>
-          </TouchableOpacity>
-          {!allDay && (
-            <TouchableOpacity style={styles.dateButton} onPress={() => setShowTimePicker(true)}>
-              <Ionicons name="time-outline" size={15} color={sectionColors.calendar} />
-              <Text style={styles.dateButtonText}>
-                {formatTime(date, { hour: "2-digit", minute: "2-digit" })}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        {showDatePicker && (
-          <DateTimePicker
-            value={date}
-            mode="date"
-            display="default"
-            onChange={(_, selected) => {
-              setShowDatePicker(false);
-              if (selected) {
-                const next = new Date(date);
-                next.setFullYear(selected.getFullYear(), selected.getMonth(), selected.getDate());
-                setDate(next);
-              }
-            }}
-          />
-        )}
-        {showTimePicker && (
-          <DateTimePicker
-            value={date}
-            mode="time"
-            display="default"
-            onChange={(_, selected) => {
-              setShowTimePicker(false);
-              if (selected) {
-                const next = new Date(date);
-                next.setHours(selected.getHours(), selected.getMinutes());
-                setDate(next);
-              }
-            }}
-          />
-        )}
+        <EventDateRangePicker
+          allDay={allDay}
+          onAllDayChange={setAllDay}
+          startAt={startAt}
+          endAt={endAt}
+          onStartAtChange={setStartAt}
+          onEndAtChange={setEndAt}
+          tint={sectionColors.calendar}
+        />
 
         <FieldLabel icon="location-outline" label={t("calendar.location")} />
         <TextField placeholder={t("calendar.wherePlaceholder")} value={location} onChangeText={setLocation} />
@@ -246,19 +206,6 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, fontWeight: "600", color: colors.textMuted, marginTop: spacing.sm },
   creatorText: { fontSize: 12, color: colors.textFaint },
   switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.xs },
-  dateRow: { flexDirection: "row", gap: spacing.sm },
-  dateButton: {
-    flex: 1,
-    flexDirection: "row",
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dateButtonText: { fontSize: 15, fontWeight: "600", color: colors.text },
   detailsInput: { minHeight: 90, textAlignVertical: "top" },
   saveButton: { marginTop: spacing.lg, backgroundColor: sectionColors.calendar },
   emptyText: { color: colors.textMuted },

@@ -1,4 +1,5 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import type { Occurrence } from "@/lib/recurrence";
 import type { CalendarEvent } from "@/hooks/useEvents";
@@ -8,6 +9,8 @@ import { getEventDotColors } from "@/lib/memberColors";
 import { formatDate, isToday, startOfWeek } from "@/lib/dateUtils";
 import { weekdaysInitialMonFirst } from "@/lib/weekdayLabels";
 import { colors, radii, sectionColors, spacing } from "@/lib/theme";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 type Props = {
   monthAnchor: Date;
@@ -19,8 +22,54 @@ type Props = {
   onNavigate: (direction: -1 | 1) => void;
 };
 
+type Bar = {
+  key: string;
+  eventId: string;
+  title: string;
+  color: string;
+  lane: number;
+  startIndex: number;
+  endIndex: number;
+};
+
+function dateOnly(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function dayIndex(date: Date, gridStart: Date): number {
+  return Math.round((dateOnly(date).getTime() - gridStart.getTime()) / DAY_MS);
+}
+
+// Greedy interval-graph coloring: assigns each bar the lowest lane number
+// that isn't already occupied by another bar overlapping its day range, so
+// a multi-week event keeps the same lane (row) as it crosses week rows.
+function assignLanes(bars: Omit<Bar, "lane">[]): Bar[] {
+  const sorted = [...bars].sort((a, b) => {
+    if (a.startIndex !== b.startIndex) return a.startIndex - b.startIndex;
+    return b.endIndex - b.startIndex - (a.endIndex - a.startIndex);
+  });
+  const laneEnd: number[] = [];
+  const result: Bar[] = [];
+  for (const bar of sorted) {
+    let lane = laneEnd.findIndex((end) => end < bar.startIndex);
+    if (lane === -1) {
+      lane = laneEnd.length;
+      laneEnd.push(bar.endIndex);
+    } else {
+      laneEnd[lane] = bar.endIndex;
+    }
+    result.push({ ...bar, lane });
+  }
+  return result;
+}
+
 export function MonthGrid({ monthAnchor, selectedDay, occurrences, members, holidays, onSelectDay, onNavigate }: Props) {
-  const { i18n } = useTranslation();
+  // Destructuring from useTranslation (even unused directly) subscribes this
+  // component to i18n language changes, which weekdaysInitialMonFirst/formatDate
+  // read from the i18n singleton outside React's render cycle.
+  useTranslation();
   const dayInitials = weekdaysInitialMonFirst();
   const monthStart = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(), 1);
   const monthEnd = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0);
@@ -33,7 +82,19 @@ export function MonthGrid({ monthAnchor, selectedDay, occurrences, members, holi
     days.push(new Date(cursor));
   }
 
+  const bars = assignLanes(
+    occurrences.map((occ) => ({
+      key: occ.key,
+      eventId: occ.event.id,
+      title: occ.event.title,
+      color: getEventDotColors(occ.event, members)[0] ?? sectionColors.calendar,
+      startIndex: Math.max(0, dayIndex(occ.startAt, gridStart)),
+      endIndex: Math.min(days.length - 1, dayIndex(occ.endAt, gridStart)),
+    }))
+  );
+
   const headerLabel = formatDate(monthAnchor, { month: "long", year: "numeric" });
+  const weekCount = days.length / 7;
 
   return (
     <View>
@@ -53,54 +114,99 @@ export function MonthGrid({ monthAnchor, selectedDay, occurrences, members, holi
           </Text>
         ))}
       </View>
-      <View style={styles.grid}>
-        {days.map((day, i) => {
-          const inMonth = day.getMonth() === monthAnchor.getMonth();
-          const selected = day.toDateString() === selectedDay.toDateString();
-          const today = isToday(day);
-          const dayColors = Array.from(
-            new Set(
-              occurrences
-                .filter((occ) => occ.startAt.toDateString() === day.toDateString())
-                .flatMap((occ) => getEventDotColors(occ.event, members))
-            )
-          ).slice(0, 3);
-          const publicHoliday = holidays.find(
-            (h) => h.type === "public" && h.date.toDateString() === day.toDateString()
-          );
-          const schoolHoliday = holidays.find(
-            (h) => h.type === "school" && h.date.toDateString() === day.toDateString()
-          );
-          return (
-            <TouchableOpacity key={i} style={styles.dayCell} onPress={() => onSelectDay(day)}>
-              <View
-                style={[
-                  styles.dateCircle,
-                  selected && styles.dateCircleSelected,
-                  today && !selected && styles.dateCircleToday,
-                  publicHoliday && !selected && { borderWidth: 1.5, borderColor: publicHoliday.color },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.dateNumber,
-                    !inMonth && styles.dateNumberFaint,
-                    selected && styles.dateNumberSelected,
-                  ]}
-                >
-                  {day.getDate()}
-                </Text>
-              </View>
-              <View style={styles.dotRow}>
-                {dayColors.map((c, ci) => (
-                  <View key={ci} style={[styles.dot, { backgroundColor: c }]} />
-                ))}
-              </View>
-              {schoolHoliday && <View style={[styles.schoolHolidayBar, { backgroundColor: schoolHoliday.color }]} />}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+
+      {Array.from({ length: weekCount }, (_, weekIndex) => {
+        const weekStartIndex = weekIndex * 7;
+        const weekDays = days.slice(weekStartIndex, weekStartIndex + 7);
+        const weekBars = bars.filter((b) => b.startIndex <= weekStartIndex + 6 && b.endIndex >= weekStartIndex);
+        const laneCount = weekBars.reduce((max, b) => Math.max(max, b.lane + 1), 0);
+
+        return (
+          <View key={weekIndex} style={styles.weekRow}>
+            <View style={[StyleSheet.absoluteFill, styles.weekTapLayer]} pointerEvents="box-none">
+              {weekDays.map((day, i) => (
+                <TouchableOpacity key={i} style={styles.dayTapColumn} onPress={() => onSelectDay(day)} />
+              ))}
+            </View>
+
+            <View pointerEvents="none" style={styles.weekNumbersRow}>
+              {weekDays.map((day, i) => {
+                const inMonth = day.getMonth() === monthAnchor.getMonth();
+                const selected = day.toDateString() === selectedDay.toDateString();
+                const today = isToday(day);
+                const publicHoliday = holidays.find(
+                  (h) => h.type === "public" && h.date.toDateString() === day.toDateString()
+                );
+                const schoolHoliday = holidays.find(
+                  (h) => h.type === "school" && h.date.toDateString() === day.toDateString()
+                );
+                return (
+                  <View key={i} style={styles.dayHeaderCell}>
+                    <View
+                      style={[
+                        styles.dateCircle,
+                        selected && styles.dateCircleSelected,
+                        today && !selected && styles.dateCircleToday,
+                        publicHoliday && !selected && { borderWidth: 1.5, borderColor: publicHoliday.color },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.dateNumber,
+                          !inMonth && styles.dateNumberFaint,
+                          selected && styles.dateNumberSelected,
+                        ]}
+                      >
+                        {day.getDate()}
+                      </Text>
+                    </View>
+                    {schoolHoliday && <View style={[styles.schoolHolidayBar, { backgroundColor: schoolHoliday.color }]} />}
+                  </View>
+                );
+              })}
+            </View>
+
+            <View pointerEvents="box-none" style={styles.laneStack}>
+              {Array.from({ length: laneCount }, (_, lane) => (
+                <View key={lane} pointerEvents="box-none" style={styles.laneRow}>
+                  {weekBars
+                    .filter((b) => b.lane === lane)
+                    .map((bar) => {
+                      const clippedStart = Math.max(bar.startIndex, weekStartIndex) - weekStartIndex;
+                      const clippedEnd = Math.min(bar.endIndex, weekStartIndex + 6) - weekStartIndex;
+                      const left = (clippedStart / 7) * 100;
+                      const width = ((clippedEnd - clippedStart + 1) / 7) * 100;
+                      const roundLeft = bar.startIndex >= weekStartIndex;
+                      const roundRight = bar.endIndex <= weekStartIndex + 6;
+                      return (
+                        <TouchableOpacity
+                          key={bar.key}
+                          style={[
+                            styles.bar,
+                            {
+                              left: `${left}%`,
+                              width: `${width}%`,
+                              backgroundColor: bar.color,
+                              borderTopLeftRadius: roundLeft ? radii.sm : 0,
+                              borderBottomLeftRadius: roundLeft ? radii.sm : 0,
+                              borderTopRightRadius: roundRight ? radii.sm : 0,
+                              borderBottomRightRadius: roundRight ? radii.sm : 0,
+                            },
+                          ]}
+                          onPress={() => router.push(`/event/${bar.eventId}`)}
+                        >
+                          <Text style={styles.barText} numberOfLines={1}>
+                            {bar.title}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                </View>
+              ))}
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -116,17 +222,22 @@ const styles = StyleSheet.create({
   navButton: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
   navButtonText: { fontSize: 20, fontWeight: "700", color: sectionColors.calendar },
   navLabel: { fontSize: 14, fontWeight: "700", color: colors.text },
-  weekdayRow: { flexDirection: "row", paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
+  weekdayRow: { flexDirection: "row", paddingHorizontal: spacing.sm, paddingTop: spacing.sm },
   weekdayLabel: { flex: 1, textAlign: "center", fontSize: 11, fontWeight: "700", color: colors.textFaint },
-  grid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
-  dayCell: { width: `${100 / 7}%`, alignItems: "center", gap: 3, paddingVertical: 4 },
-  dateCircle: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  weekRow: { paddingHorizontal: spacing.sm, paddingTop: spacing.xs },
+  weekTapLayer: { flexDirection: "row" },
+  dayTapColumn: { flex: 1 },
+  weekNumbersRow: { flexDirection: "row" },
+  dayHeaderCell: { flex: 1, alignItems: "center", gap: 2, paddingBottom: 2 },
+  dateCircle: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
   dateCircleSelected: { backgroundColor: sectionColors.calendar },
   dateCircleToday: { borderWidth: 1.5, borderColor: sectionColors.calendar },
-  dateNumber: { fontSize: 13, fontWeight: "600", color: colors.text },
+  dateNumber: { fontSize: 12, fontWeight: "600", color: colors.text },
   dateNumberFaint: { color: colors.textFaint },
   dateNumberSelected: { color: colors.white },
-  dotRow: { flexDirection: "row", gap: 2, height: 6 },
-  dot: { width: 5, height: 5, borderRadius: radii.pill },
-  schoolHolidayBar: { width: "100%", height: 4, marginTop: 2 },
+  schoolHolidayBar: { width: "70%", height: 3, borderRadius: radii.pill },
+  laneStack: { gap: 2, paddingBottom: 3 },
+  laneRow: { height: 15, position: "relative" },
+  bar: { position: "absolute", top: 0, bottom: 0, justifyContent: "center", paddingHorizontal: 4 },
+  barText: { fontSize: 9, fontWeight: "700", color: colors.white },
 });
