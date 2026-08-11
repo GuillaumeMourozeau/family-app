@@ -57,7 +57,6 @@ export default function CalendarScreen() {
 
   const [weekAnchor, setWeekAnchor] = useState(new Date());
   const [monthAnchor, setMonthAnchor] = useState(new Date());
-  const [selectedDay, setSelectedDay] = useState(new Date());
 
   const filteredEvents = useMemo(
     () =>
@@ -145,14 +144,12 @@ export default function CalendarScreen() {
     const next = new Date(weekAnchor);
     next.setDate(next.getDate() + dir * 7);
     setWeekAnchor(next);
-    setSelectedDay(next);
   }
   const weekSwipeHandlers = useSwipeNavigate(navigateWeek);
 
   function navigateMonth(dir: -1 | 1) {
     const next = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + dir, 1);
     setMonthAnchor(next);
-    setSelectedDay(next);
   }
   const monthSwipeHandlers = useSwipeNavigate(navigateMonth);
 
@@ -160,7 +157,6 @@ export default function CalendarScreen() {
     const now = new Date();
     setWeekAnchor(now);
     setMonthAnchor(now);
-    setSelectedDay(now);
   }
 
   function resetFormFields() {
@@ -199,11 +195,6 @@ export default function CalendarScreen() {
     setEndAt(new Date(slotStart.getTime() + 60 * 60 * 1000));
     setAllDay(false);
     setIsAdding(true);
-  }
-
-  function handleSelectDay(day: Date) {
-    setSelectedDay(day);
-    openAddEventForDay(day);
   }
 
   async function handleAddEvent() {
@@ -325,11 +316,10 @@ export default function CalendarScreen() {
           <ScrollView style={styles.flex} contentContainerStyle={styles.monthContent}>
             <MonthGrid
               monthAnchor={monthAnchor}
-              selectedDay={selectedDay}
               occurrences={monthOccurrences}
               members={members}
               holidays={monthHolidays}
-              onSelectDay={handleSelectDay}
+              onSelectDay={openAddEventForDay}
               onNavigate={navigateMonth}
             />
           </ScrollView>

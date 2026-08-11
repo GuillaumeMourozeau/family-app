@@ -11,10 +11,10 @@ import { weekdaysInitialMonFirst } from "@/lib/weekdayLabels";
 import { colors, radii, sectionColors, spacing } from "@/lib/theme";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MIN_VISIBLE_LANES = 2;
 
 type Props = {
   monthAnchor: Date;
-  selectedDay: Date;
   occurrences: Occurrence<CalendarEvent>[];
   members: FamilyMember[];
   holidays: HolidayMarker[];
@@ -42,6 +42,35 @@ function dayIndex(date: Date, gridStart: Date): number {
   return Math.round((dateOnly(date).getTime() - gridStart.getTime()) / DAY_MS);
 }
 
+type HolidayRun = { key: string; startIndex: number; endIndex: number; color: string };
+
+// Merges consecutive days marked as a school holiday into single continuous
+// runs, so a holiday spanning a month boundary (or several weeks) draws as
+// one unbroken line instead of a separate mark per day.
+function computeSchoolHolidayRuns(days: Date[], holidays: HolidayMarker[]): HolidayRun[] {
+  const schoolByDate = new Map<string, HolidayMarker>();
+  for (const h of holidays) {
+    if (h.type === "school") schoolByDate.set(h.date.toDateString(), h);
+  }
+  const runs: HolidayRun[] = [];
+  let current: HolidayRun | null = null;
+  days.forEach((day, i) => {
+    const marker = schoolByDate.get(day.toDateString());
+    if (marker) {
+      if (current) {
+        current.endIndex = i;
+      } else {
+        current = { key: `${i}`, startIndex: i, endIndex: i, color: marker.color };
+      }
+    } else if (current) {
+      runs.push(current);
+      current = null;
+    }
+  });
+  if (current) runs.push(current);
+  return runs;
+}
+
 // Greedy interval-graph coloring: assigns each bar the lowest lane number
 // that isn't already occupied by another bar overlapping its day range, so
 // a multi-week event keeps the same lane (row) as it crosses week rows.
@@ -65,7 +94,7 @@ function assignLanes(bars: Omit<Bar, "lane">[]): Bar[] {
   return result;
 }
 
-export function MonthGrid({ monthAnchor, selectedDay, occurrences, members, holidays, onSelectDay, onNavigate }: Props) {
+export function MonthGrid({ monthAnchor, occurrences, members, holidays, onSelectDay, onNavigate }: Props) {
   // Destructuring from useTranslation (even unused directly) subscribes this
   // component to i18n language changes, which weekdaysInitialMonFirst/formatDate
   // read from the i18n singleton outside React's render cycle.
@@ -93,6 +122,8 @@ export function MonthGrid({ monthAnchor, selectedDay, occurrences, members, holi
     }))
   );
 
+  const schoolHolidayRuns = computeSchoolHolidayRuns(days, holidays);
+
   const headerLabel = formatDate(monthAnchor, { month: "long", year: "numeric" });
   const weekCount = days.length / 7;
 
@@ -119,7 +150,10 @@ export function MonthGrid({ monthAnchor, selectedDay, occurrences, members, holi
         const weekStartIndex = weekIndex * 7;
         const weekDays = days.slice(weekStartIndex, weekStartIndex + 7);
         const weekBars = bars.filter((b) => b.startIndex <= weekStartIndex + 6 && b.endIndex >= weekStartIndex);
-        const laneCount = weekBars.reduce((max, b) => Math.max(max, b.lane + 1), 0);
+        const laneCount = Math.max(MIN_VISIBLE_LANES, weekBars.reduce((max, b) => Math.max(max, b.lane + 1), 0));
+        const weekHolidayRuns = schoolHolidayRuns.filter(
+          (r) => r.startIndex <= weekStartIndex + 6 && r.endIndex >= weekStartIndex
+        );
 
         return (
           <View key={weekIndex} style={styles.weekRow}>
@@ -132,39 +166,55 @@ export function MonthGrid({ monthAnchor, selectedDay, occurrences, members, holi
             <View pointerEvents="none" style={styles.weekNumbersRow}>
               {weekDays.map((day, i) => {
                 const inMonth = day.getMonth() === monthAnchor.getMonth();
-                const selected = day.toDateString() === selectedDay.toDateString();
                 const today = isToday(day);
                 const publicHoliday = holidays.find(
                   (h) => h.type === "public" && h.date.toDateString() === day.toDateString()
-                );
-                const schoolHoliday = holidays.find(
-                  (h) => h.type === "school" && h.date.toDateString() === day.toDateString()
                 );
                 return (
                   <View key={i} style={styles.dayHeaderCell}>
                     <View
                       style={[
                         styles.dateCircle,
-                        selected && styles.dateCircleSelected,
-                        today && !selected && styles.dateCircleToday,
-                        publicHoliday && !selected && { borderWidth: 1.5, borderColor: publicHoliday.color },
+                        today && styles.dateCircleToday,
+                        publicHoliday && { borderWidth: 1.5, borderColor: publicHoliday.color },
                       ]}
                     >
-                      <Text
-                        style={[
-                          styles.dateNumber,
-                          !inMonth && styles.dateNumberFaint,
-                          selected && styles.dateNumberSelected,
-                        ]}
-                      >
-                        {day.getDate()}
-                      </Text>
+                      <Text style={[styles.dateNumber, !inMonth && styles.dateNumberFaint]}>{day.getDate()}</Text>
                     </View>
-                    {schoolHoliday && <View style={[styles.schoolHolidayBar, { backgroundColor: schoolHoliday.color }]} />}
                   </View>
                 );
               })}
             </View>
+
+            {weekHolidayRuns.length > 0 && (
+              <View pointerEvents="none" style={styles.holidayRow}>
+                {weekHolidayRuns.map((run) => {
+                  const clippedStart = Math.max(run.startIndex, weekStartIndex) - weekStartIndex;
+                  const clippedEnd = Math.min(run.endIndex, weekStartIndex + 6) - weekStartIndex;
+                  const left = (clippedStart / 7) * 100;
+                  const width = ((clippedEnd - clippedStart + 1) / 7) * 100;
+                  const roundLeft = run.startIndex >= weekStartIndex;
+                  const roundRight = run.endIndex <= weekStartIndex + 6;
+                  return (
+                    <View
+                      key={run.key}
+                      style={[
+                        styles.holidayBar,
+                        {
+                          left: `${left}%`,
+                          width: `${width}%`,
+                          backgroundColor: run.color,
+                          borderTopLeftRadius: roundLeft ? radii.pill : 0,
+                          borderBottomLeftRadius: roundLeft ? radii.pill : 0,
+                          borderTopRightRadius: roundRight ? radii.pill : 0,
+                          borderBottomRightRadius: roundRight ? radii.pill : 0,
+                        },
+                      ]}
+                    />
+                  );
+                })}
+              </View>
+            )}
 
             <View pointerEvents="box-none" style={styles.laneStack}>
               {Array.from({ length: laneCount }, (_, lane) => (
@@ -230,12 +280,11 @@ const styles = StyleSheet.create({
   weekNumbersRow: { flexDirection: "row" },
   dayHeaderCell: { flex: 1, alignItems: "center", gap: 2, paddingBottom: 2 },
   dateCircle: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  dateCircleSelected: { backgroundColor: sectionColors.calendar },
   dateCircleToday: { borderWidth: 1.5, borderColor: sectionColors.calendar },
   dateNumber: { fontSize: 12, fontWeight: "600", color: colors.text },
   dateNumberFaint: { color: colors.textFaint },
-  dateNumberSelected: { color: colors.white },
-  schoolHolidayBar: { width: "70%", height: 3, borderRadius: radii.pill },
+  holidayRow: { height: 2, position: "relative", marginBottom: 2 },
+  holidayBar: { position: "absolute", top: 0, bottom: 0 },
   laneStack: { gap: 2, paddingBottom: 3 },
   laneRow: { height: 15, position: "relative" },
   bar: { position: "absolute", top: 0, bottom: 0, justifyContent: "center", paddingHorizontal: 4 },
