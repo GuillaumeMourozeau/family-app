@@ -8,6 +8,7 @@ import {
 } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { readCache, writeCache } from "@/lib/offline/cache";
 
 export type NotificationPrefs = {
   messages: boolean;
@@ -66,17 +67,32 @@ export function ProfileProvider({ children }: PropsWithChildren) {
       .eq("id", userId)
       .single();
 
+    // Offline or the request failed — keep whatever profile is already
+    // loaded (from cache or a prior fetch) rather than wiping it, since
+    // this is the row every other hook depends on for family_id.
     if (!error) {
       setProfile(data);
+      writeCache(`profile:${userId}`, data);
     }
     setIsLoading(false);
   }, [userId]);
 
   useEffect(() => {
     setIsLoading(true);
-    refetch();
+    let cancelled = false;
+    (async () => {
+      if (userId) {
+        const cached = await readCache<Profile>(`profile:${userId}`);
+        if (cached && !cancelled) setProfile(cached);
+      }
+      await refetch();
+    })();
 
-    if (!userId) return;
+    if (!userId) {
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const channel = supabase
       .channel(`profile:${userId}`)
@@ -88,6 +104,7 @@ export function ProfileProvider({ children }: PropsWithChildren) {
       .subscribe();
 
     return () => {
+      cancelled = true;
       supabase.removeChannel(channel);
     };
   }, [userId, refetch]);

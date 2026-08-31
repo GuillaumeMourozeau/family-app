@@ -5,10 +5,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useGroceries } from "@/hooks/useGroceries";
 import { displayPlaceName } from "@/lib/groceryPlaces";
+import { DEFAULT_GROCERY_ITEM_CATEGORY, isGroceryItemCategory, type GroceryItemCategory } from "@/lib/groceryItemCategories";
 import { Chip } from "@/components/Chip";
 import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
 import { FieldLabel } from "@/components/FieldLabel";
+import { GroceryItemCategoryPicker } from "@/components/GroceryItemCategoryPicker";
 import { colors, radii, sectionColors, spacing } from "@/lib/theme";
 
 export default function GroceryDetailScreen() {
@@ -20,6 +22,7 @@ export default function GroceryDetailScreen() {
 
   const [name, setName] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [itemCategory, setItemCategory] = useState<GroceryItemCategory>(DEFAULT_GROCERY_ITEM_CATEGORY);
   const [details, setDetails] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -27,6 +30,7 @@ export default function GroceryDetailScreen() {
     if (!item) return;
     setName(item.name);
     setCategoryId(item.category_id);
+    setItemCategory(isGroceryItemCategory(item.item_category) ? item.item_category : DEFAULT_GROCERY_ITEM_CATEGORY);
     setDetails(item.description ?? "");
   }, [item?.id]);
 
@@ -36,6 +40,7 @@ export default function GroceryDetailScreen() {
     await updateItem(item.id, {
       name: name.trim(),
       categoryId,
+      itemCategory,
       description: details.trim() || null,
     });
     setIsSaving(false);
@@ -89,6 +94,9 @@ export default function GroceryDetailScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <FieldLabel icon="create-outline" label={t("groceries.name")} />
         <TextField placeholder={t("groceries.itemNamePlaceholder")} value={name} onChangeText={setName} />
+
+        <FieldLabel icon="pricetag-outline" label={t("groceries.chooseCategory")} />
+        <GroceryItemCategoryPicker value={itemCategory} onChange={setItemCategory} tint={sectionColors.groceries} />
 
         <FieldLabel icon="storefront-outline" label={t("groceries.where")} />
         <View style={styles.chipRow}>

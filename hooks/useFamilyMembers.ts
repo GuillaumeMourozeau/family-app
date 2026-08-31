@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
+import { readCache, writeCache } from "@/lib/offline/cache";
+import { withOfflineQueue } from "@/lib/offline/mutate";
+import { offlineHandlers } from "@/lib/offline/handlers";
 
 export type FamilyRole = "admin" | "user";
 
@@ -17,6 +20,7 @@ export function useFamilyMembers() {
   const familyId = profile?.family_id;
   const viewerId = profile?.id;
   const instanceId = useId();
+  const cacheKey = familyId && viewerId ? `familyMembers:${familyId}:${viewerId}` : null;
   const [members, setMembers] = useState<FamilyMember[]>([]);
 
   // Membership lives in family_members (separate from profiles.family_id,
@@ -25,17 +29,19 @@ export function useFamilyMembers() {
   // keeps working unchanged — it's just "the color I personally see them as".
   const refetch = useCallback(async () => {
     if (!familyId || !viewerId) return;
-    const { data: memberRows } = await supabase
+    const { data: memberRows, error: memberError } = await supabase
       .from("family_members")
       .select("profile_id, role")
       .eq("family_id", familyId);
+    if (memberError) return; // offline or request failed — keep showing cached/local state
     const roleByProfile = new Map((memberRows ?? []).map((r) => [r.profile_id as string, r.role as FamilyRole]));
     const profileIds = Array.from(roleByProfile.keys());
     if (profileIds.length === 0) {
       setMembers([]);
+      if (cacheKey) writeCache(cacheKey, []);
       return;
     }
-    const [{ data: profileRows }, { data: colorRows }] = await Promise.all([
+    const [{ data: profileRows, error: profileError }, { data: colorRows, error: colorError }] = await Promise.all([
       supabase
         .from("profiles")
         .select("id, full_name, is_managed")
@@ -43,21 +49,34 @@ export function useFamilyMembers() {
         .order("created_at", { ascending: true }),
       supabase.from("member_color_prefs").select("member_id, color").eq("viewer_id", viewerId).in("member_id", profileIds),
     ]);
+    if (profileError || colorError) return;
     const colorByMember = new Map((colorRows ?? []).map((r) => [r.member_id as string, r.color as string]));
-    setMembers(
-      (profileRows ?? []).map((p) => ({
-        id: p.id,
-        full_name: p.full_name,
-        is_managed: p.is_managed,
-        role: roleByProfile.get(p.id) ?? "user",
-        color: colorByMember.get(p.id) ?? null,
-      }))
-    );
-  }, [familyId, viewerId]);
+    const next = (profileRows ?? []).map((p) => ({
+      id: p.id,
+      full_name: p.full_name,
+      is_managed: p.is_managed,
+      role: roleByProfile.get(p.id) ?? "user",
+      color: colorByMember.get(p.id) ?? null,
+    }));
+    setMembers(next);
+    if (cacheKey) writeCache(cacheKey, next);
+  }, [familyId, viewerId, cacheKey]);
 
   useEffect(() => {
-    refetch();
+    let cancelled = false;
+    (async () => {
+      if (cacheKey) {
+        const cached = await readCache<FamilyMember[]>(cacheKey);
+        if (cached && !cancelled) setMembers(cached);
+      }
+      refetch();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cacheKey, refetch]);
 
+  useEffect(() => {
     if (!familyId) return;
 
     const channel = supabase
@@ -79,12 +98,14 @@ export function useFamilyMembers() {
   async function updateMemberColor(memberId: string, color: string) {
     if (!viewerId) return;
     setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, color } : m)));
-    const { error } = await supabase
-      .from("member_color_prefs")
-      .upsert({ viewer_id: viewerId, member_id: memberId, color });
-    if (error) refetch();
+    const payload = { viewerId, memberId, color };
+    await withOfflineQueue("familyMembers:updateColor", payload, () => offlineHandlers["familyMembers:updateColor"](payload));
   }
 
+  // Promote/remove/add/rename all go through server-side RPCs with their
+  // own permission checks and side effects (creating a profile, cascading a
+  // removal, ...) — not safe to blindly replay later, so these stay
+  // online-only rather than being routed through the offline queue.
   async function promoteToAdmin(memberId: string) {
     if (!familyId) return { error: null as string | null };
     const { error } = await supabase.rpc("promote_to_admin", {

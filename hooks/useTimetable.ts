@@ -2,6 +2,10 @@ import { useCallback, useEffect, useId, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
 import { toDateKey } from "@/lib/dateUtils";
+import { readCache, writeCache } from "@/lib/offline/cache";
+import { withOfflineQueue } from "@/lib/offline/mutate";
+import { offlineHandlers, type DeletePayload, type InsertPayload, type UpdatePayload } from "@/lib/offline/handlers";
+import { generateLocalId } from "@/lib/offline/id";
 
 export type TimetableBlock = {
   id: string;
@@ -28,6 +32,8 @@ export function useTimetable() {
   const { profile } = useProfile();
   const familyId = profile?.family_id;
   const instanceId = useId();
+  const blocksCacheKey = familyId ? `timetableBlocks:${familyId}` : null;
+  const overridesCacheKey = familyId ? `timetableOverrides:${familyId}` : null;
 
   const [blocks, setBlocks] = useState<TimetableBlock[]>([]);
   const [overrides, setOverrides] = useState<TimetableOverride[]>([]);
@@ -35,20 +41,43 @@ export function useTimetable() {
 
   const refetch = useCallback(async () => {
     if (!familyId) return;
-    const { data: blockRows } = await supabase.from("timetable_blocks").select("*").eq("family_id", familyId);
+    const { data: blockRows, error: blocksError } = await supabase.from("timetable_blocks").select("*").eq("family_id", familyId);
+    if (blocksError) return;
     const blockIds = (blockRows ?? []).map((b) => b.id);
-    const { data: overrideRows } =
+    const { data: overrideRows, error: overridesError } =
       blockIds.length > 0
         ? await supabase.from("timetable_overrides").select("*").in("block_id", blockIds)
-        : { data: [] };
+        : { data: [], error: null };
+    if (overridesError) return;
     setBlocks(blockRows ?? []);
     setOverrides(overrideRows ?? []);
-    setIsLoading(false);
-  }, [familyId]);
+    if (blocksCacheKey) writeCache(blocksCacheKey, blockRows ?? []);
+    if (overridesCacheKey) writeCache(overridesCacheKey, overrideRows ?? []);
+  }, [familyId, blocksCacheKey, overridesCacheKey]);
 
   useEffect(() => {
     setIsLoading(true);
-    refetch();
+    let cancelled = false;
+    (async () => {
+      if (blocksCacheKey && overridesCacheKey) {
+        const [cachedBlocks, cachedOverrides] = await Promise.all([
+          readCache<TimetableBlock[]>(blocksCacheKey),
+          readCache<TimetableOverride[]>(overridesCacheKey),
+        ]);
+        if (!cancelled) {
+          if (cachedBlocks) setBlocks(cachedBlocks);
+          if (cachedOverrides) setOverrides(cachedOverrides);
+        }
+      }
+      await refetch();
+      if (!cancelled) setIsLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [familyId, blocksCacheKey, overridesCacheKey, refetch]);
+
+  useEffect(() => {
     if (!familyId) return;
     const channel = supabase
       .channel(`timetable:${familyId}:${instanceId}`)
@@ -73,22 +102,21 @@ export function useTimetable() {
     label: string;
   }) {
     if (!familyId || !profile || input.daysOfWeek.length === 0) return null;
-    const { data, error } = await supabase
-      .from("timetable_blocks")
-      .insert({
-        family_id: familyId,
-        profile_id: input.appliesToWholeFamily ? null : input.profileId,
-        applies_to_whole_family: input.appliesToWholeFamily,
-        days_of_week: input.daysOfWeek,
-        start_time: input.startTime,
-        end_time: input.endTime,
-        label: input.label,
-        created_by: profile.id,
-      })
-      .select()
-      .single();
-    if (error || !data) return null;
-    return data as TimetableBlock;
+    const id = generateLocalId();
+    const row = {
+      profile_id: input.appliesToWholeFamily ? null : input.profileId,
+      applies_to_whole_family: input.appliesToWholeFamily,
+      days_of_week: input.daysOfWeek,
+      start_time: input.startTime,
+      end_time: input.endTime,
+      label: input.label,
+    };
+    const optimisticBlock: TimetableBlock = { id, created_by: profile.id, ...row };
+    setBlocks((prev) => [...prev, optimisticBlock]);
+
+    const payload: InsertPayload = { id, familyId, createdBy: profile.id, row };
+    await withOfflineQueue("timetableBlocks:add", payload, () => offlineHandlers["timetableBlocks:add"](payload));
+    return optimisticBlock;
   }
 
   async function updateBlock(
@@ -96,21 +124,17 @@ export function useTimetable() {
     input: { startTime: string; endTime: string; label: string; daysOfWeek: number[] }
   ) {
     if (input.daysOfWeek.length === 0) return;
-    await supabase
-      .from("timetable_blocks")
-      .update({
-        start_time: input.startTime,
-        end_time: input.endTime,
-        label: input.label,
-        days_of_week: input.daysOfWeek,
-      })
-      .eq("id", id);
+    const row = { start_time: input.startTime, end_time: input.endTime, label: input.label, days_of_week: input.daysOfWeek };
+    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...row } : b)));
+    const payload: UpdatePayload = { id, row };
+    await withOfflineQueue("timetableBlocks:update", payload, () => offlineHandlers["timetableBlocks:update"](payload));
   }
 
   async function deleteBlock(id: string) {
     setBlocks((prev) => prev.filter((b) => b.id !== id));
-    const { error } = await supabase.from("timetable_blocks").delete().eq("id", id);
-    if (error) refetch();
+    setOverrides((prev) => prev.filter((o) => o.block_id !== id));
+    const payload: DeletePayload = { id };
+    await withOfflineQueue("timetableBlocks:delete", payload, () => offlineHandlers["timetableBlocks:delete"](payload));
   }
 
   async function setOverride(
@@ -118,21 +142,33 @@ export function useTimetable() {
     date: string,
     patch: { isCancelled?: boolean; startTime?: string | null; endTime?: string | null; label?: string | null }
   ) {
-    await supabase.from("timetable_overrides").upsert(
-      {
-        block_id: blockId,
-        override_date: date,
-        is_cancelled: patch.isCancelled ?? false,
-        start_time: patch.startTime ?? null,
-        end_time: patch.endTime ?? null,
-        label: patch.label ?? null,
-      },
-      { onConflict: "block_id,override_date" }
-    );
+    const row = {
+      block_id: blockId,
+      override_date: date,
+      is_cancelled: patch.isCancelled ?? false,
+      start_time: patch.startTime ?? null,
+      end_time: patch.endTime ?? null,
+      label: patch.label ?? null,
+    };
+    setOverrides((prev) => {
+      const existingIndex = prev.findIndex((o) => o.block_id === blockId && o.override_date === date);
+      const optimisticOverride: TimetableOverride = { id: existingIndex >= 0 ? prev[existingIndex].id : generateLocalId(), ...row };
+      if (existingIndex >= 0) {
+        const next = [...prev];
+        next[existingIndex] = optimisticOverride;
+        return next;
+      }
+      return [...prev, optimisticOverride];
+    });
+
+    const payload = { row };
+    await withOfflineQueue("timetableOverrides:upsert", payload, () => offlineHandlers["timetableOverrides:upsert"](payload));
   }
 
   async function clearOverride(blockId: string, date: string) {
-    await supabase.from("timetable_overrides").delete().eq("block_id", blockId).eq("override_date", date);
+    setOverrides((prev) => prev.filter((o) => !(o.block_id === blockId && o.override_date === date)));
+    const payload = { blockId, date };
+    await withOfflineQueue("timetableOverrides:clear", payload, () => offlineHandlers["timetableOverrides:clear"](payload));
   }
 
   // Cancels every occurrence of a block's usual days within [startDate, endDate]
@@ -167,11 +203,20 @@ export function useTimetable() {
       cursor.setDate(cursor.getDate() + 1);
     }
     if (rows.length === 0) return;
-    const { error } = await supabase
-      .from("timetable_overrides")
-      .upsert(rows, { onConflict: "block_id,override_date" });
-    if (error) return;
-    refetch();
+
+    setOverrides((prev) => {
+      const next = [...prev];
+      for (const row of rows) {
+        const existingIndex = next.findIndex((o) => o.block_id === row.block_id && o.override_date === row.override_date);
+        const optimisticOverride: TimetableOverride = { id: existingIndex >= 0 ? next[existingIndex].id : generateLocalId(), ...row };
+        if (existingIndex >= 0) next[existingIndex] = optimisticOverride;
+        else next.push(optimisticOverride);
+      }
+      return next;
+    });
+
+    const payload = { rows };
+    await withOfflineQueue("timetableOverrides:upsertMany", payload, () => offlineHandlers["timetableOverrides:upsertMany"](payload));
   }
 
   return {

@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
+import { readCache, writeCache } from "@/lib/offline/cache";
+import { withOfflineQueue } from "@/lib/offline/mutate";
+import { offlineHandlers, type DeletePayload, type InsertPayload, type UpdatePayload } from "@/lib/offline/handlers";
+import { generateLocalId } from "@/lib/offline/id";
 
 export type MealType = "breakfast" | "lunch" | "snack" | "dinner";
 
@@ -29,20 +33,36 @@ export function useMealPlan() {
   const { profile } = useProfile();
   const familyId = profile?.family_id;
   const instanceId = useId();
+  const cacheKey = familyId ? `mealPlan:${familyId}` : null;
 
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const refetch = useCallback(async () => {
     if (!familyId) return;
-    const { data } = await supabase.from("meal_plan_entries").select("*").order("date", { ascending: true });
+    const { data, error } = await supabase.from("meal_plan_entries").select("*").order("date", { ascending: true });
+    if (error) return;
     setEntries(data ?? []);
-    setIsLoading(false);
-  }, [familyId]);
+    if (cacheKey) writeCache(cacheKey, data ?? []);
+  }, [familyId, cacheKey]);
 
   useEffect(() => {
     setIsLoading(true);
-    refetch();
+    let cancelled = false;
+    (async () => {
+      if (cacheKey) {
+        const cached = await readCache<MealPlanEntry[]>(cacheKey);
+        if (cached && !cancelled) setEntries(cached);
+      }
+      await refetch();
+      if (!cancelled) setIsLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [familyId, cacheKey, refetch]);
+
+  useEffect(() => {
     if (!familyId) return;
     const channel = supabase
       .channel(`meal_plan_entries:${familyId}:${instanceId}`)
@@ -59,36 +79,40 @@ export function useMealPlan() {
 
   async function addMeal(input: MealPlanInput) {
     if (!familyId || !profile) return;
-    await supabase.from("meal_plan_entries").insert({
-      family_id: familyId,
+    const id = generateLocalId();
+    const row = {
       date: input.date,
       meal_type: input.mealType,
       recipe_id: input.recipeId,
       title: input.title,
       serves: input.serves,
       details: input.details,
-      created_by: profile.id,
-    });
+    };
+    const optimisticEntry: MealPlanEntry = { id, created_by: profile.id, created_at: new Date().toISOString(), ...row };
+    setEntries((prev) => [...prev, optimisticEntry].sort((a, b) => a.date.localeCompare(b.date)));
+
+    const payload: InsertPayload = { id, familyId, createdBy: profile.id, row };
+    await withOfflineQueue("mealPlan:add", payload, () => offlineHandlers["mealPlan:add"](payload));
   }
 
   async function updateMeal(id: string, input: MealPlanInput) {
-    await supabase
-      .from("meal_plan_entries")
-      .update({
-        date: input.date,
-        meal_type: input.mealType,
-        recipe_id: input.recipeId,
-        title: input.title,
-        serves: input.serves,
-        details: input.details,
-      })
-      .eq("id", id);
+    const row = {
+      date: input.date,
+      meal_type: input.mealType,
+      recipe_id: input.recipeId,
+      title: input.title,
+      serves: input.serves,
+      details: input.details,
+    };
+    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...row } : e)));
+    const payload: UpdatePayload = { id, row };
+    await withOfflineQueue("mealPlan:update", payload, () => offlineHandlers["mealPlan:update"](payload));
   }
 
   async function deleteMeal(id: string) {
     setEntries((prev) => prev.filter((e) => e.id !== id));
-    const { error } = await supabase.from("meal_plan_entries").delete().eq("id", id);
-    if (error) refetch();
+    const payload: DeletePayload = { id };
+    await withOfflineQueue("mealPlan:delete", payload, () => offlineHandlers["mealPlan:delete"](payload));
   }
 
   return { entries, isLoading, addMeal, updateMeal, deleteMeal, refetch };

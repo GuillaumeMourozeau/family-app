@@ -3,9 +3,16 @@ import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity,
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { useGroceries, type GroceryItem, type GroceryPlace } from "@/hooks/useGroceries";
+import { useGroceries, byCategoryThenName, type GroceryHistoryEntry, type GroceryItem, type GroceryPlace } from "@/hooks/useGroceries";
+import { useCollapsedSections } from "@/hooks/useCollapsedSections";
 import { displayPlaceName } from "@/lib/groceryPlaces";
 import { GROCERY_STORE_ICONS, DEFAULT_GROCERY_STORE_ICON } from "@/lib/groceryStoreIcons";
+import {
+  GROCERY_ITEM_CATEGORY_ICONS,
+  DEFAULT_GROCERY_ITEM_CATEGORY,
+  isGroceryItemCategory,
+  type GroceryItemCategory,
+} from "@/lib/groceryItemCategories";
 import { useProfile } from "@/hooks/useProfile";
 import { isNewItem } from "@/lib/newBadge";
 import { TabScreenHeader } from "@/components/TabScreenHeader";
@@ -16,6 +23,9 @@ import { FieldLabel } from "@/components/FieldLabel";
 import { Chip } from "@/components/Chip";
 import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
+import { ReorderableList } from "@/components/ReorderableList";
+import { GroceryItemCategoryPicker } from "@/components/GroceryItemCategoryPicker";
+import { MultiGroceryItemEditor, emptyGroceryRow, type MultiGroceryRow } from "@/components/MultiGroceryItemEditor";
 import { colors, radii, sectionColors, sectionTints, spacing } from "@/lib/theme";
 
 export default function GroceriesScreen() {
@@ -27,6 +37,7 @@ export default function GroceriesScreen() {
     isLoading,
     addPlace,
     updatePlaceIcon,
+    reorderPlaces,
     renamePlace,
     deletePlace,
     addItem,
@@ -36,14 +47,19 @@ export default function GroceriesScreen() {
     clearChecked,
     getHistoryForPlace,
   } = useGroceries();
+  const { isCollapsed, toggle: toggleCollapsed } = useCollapsedSections("groceries");
+  const [isReordering, setIsReordering] = useState(false);
+  const [reorderScrollEnabled, setReorderScrollEnabled] = useState(true);
 
   const [isAdding, setIsAdding] = useState(false);
   const [name, setName] = useState("");
+  const [itemCategory, setItemCategory] = useState<GroceryItemCategory>(DEFAULT_GROCERY_ITEM_CATEGORY);
   const [placeId, setPlaceId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [addingPlace, setAddingPlace] = useState<GroceryPlace | null>(null);
-  const [placeItemName, setPlaceItemName] = useState("");
+  const [placeItemRows, setPlaceItemRows] = useState<MultiGroceryRow[]>([emptyGroceryRow()]);
+  const [categoryFilter, setCategoryFilter] = useState<GroceryItemCategory | null>(null);
 
   const [isAddingPlace, setIsAddingPlace] = useState(false);
   const [newPlaceName, setNewPlaceName] = useState("");
@@ -54,7 +70,12 @@ export default function GroceriesScreen() {
   const [pickingIconFor, setPickingIconFor] = useState<"new" | "edit" | null>(null);
 
   const sortedPlaces = useMemo(
-    () => [...places].sort((a, b) => (a.is_default ? -1 : b.is_default ? 1 : 0)),
+    () =>
+      [...places].sort((a, b) => {
+        if (a.is_default) return 1;
+        if (b.is_default) return -1;
+        return a.sort_order - b.sort_order;
+      }),
     [places]
   );
 
@@ -66,6 +87,9 @@ export default function GroceriesScreen() {
       list.push(item);
       byPlace.set(key, list);
     }
+    for (const list of byPlace.values()) {
+      list.sort((a, b) => byCategoryThenName({ name: a.name, category: a.item_category }, { name: b.name, category: b.item_category }));
+    }
     return byPlace;
   }, [items, defaultPlace]);
 
@@ -73,14 +97,15 @@ export default function GroceriesScreen() {
 
   function openGlobalAdd() {
     setPlaceId(defaultPlace?.id ?? null);
+    setItemCategory(DEFAULT_GROCERY_ITEM_CATEGORY);
     setIsAdding(true);
   }
 
-  async function handleAddItem(itemName?: string) {
-    const finalName = (itemName ?? name).trim();
+  async function handleAddItem() {
+    const finalName = name.trim();
     if (!finalName || isSubmitting) return;
     setIsSubmitting(true);
-    const result = await addItem(finalName, placeId);
+    const result = await addItem(finalName, placeId, { itemCategory });
     setIsSubmitting(false);
     if (result?.error) {
       Alert.alert(t("groceries.couldntAddItem"), result.error);
@@ -91,18 +116,41 @@ export default function GroceriesScreen() {
     setIsAdding(false);
   }
 
-  async function handleAddToPlace(itemName?: string) {
+  function openAddToPlace(place: GroceryPlace) {
+    setPlaceItemRows([emptyGroceryRow()]);
+    setCategoryFilter(null);
+    setAddingPlace(place);
+  }
+
+  // Tapping a "previously added here" suggestion adds it immediately —
+  // faster than routing it through the multi-row editor below.
+  async function handleQuickAddToPlace(entry: GroceryHistoryEntry) {
     if (!addingPlace || isSubmitting) return;
-    const finalName = (itemName ?? placeItemName).trim();
-    if (!finalName) return;
     setIsSubmitting(true);
-    const result = await addItem(finalName, addingPlace.id);
+    const result = await addItem(entry.name, addingPlace.id, { itemCategory: entry.itemCategory });
     setIsSubmitting(false);
     if (result?.error) {
       Alert.alert(t("groceries.couldntAddItem"), result.error);
       return;
     }
-    setPlaceItemName("");
+    setAddingPlace(null);
+  }
+
+  async function handleSubmitPlaceRows() {
+    if (!addingPlace || isSubmitting) return;
+    const validRows = placeItemRows.filter((row) => row.name.trim());
+    if (validRows.length === 0) return;
+    setIsSubmitting(true);
+    for (const row of validRows) {
+      const result = await addItem(row.name.trim(), addingPlace.id, { itemCategory: row.itemCategory });
+      if (result?.error) {
+        setIsSubmitting(false);
+        Alert.alert(t("groceries.couldntAddItem"), result.error);
+        return;
+      }
+    }
+    setIsSubmitting(false);
+    setPlaceItemRows([emptyGroceryRow()]);
     setAddingPlace(null);
   }
 
@@ -215,34 +263,45 @@ export default function GroceriesScreen() {
         }
         renderItem={({ item: place }) => {
           const rows = grouped.get(place.id) ?? [];
+          const collapsed = isCollapsed(place.id);
           return (
             <View style={styles.section}>
               <View style={styles.placeHeader}>
-                <TouchableOpacity style={styles.placeHeaderMain} onPress={() => setAddingPlace(place)}>
-                  <View style={styles.placeNameRow}>
-                    <View style={styles.placeIconCircle}>
-                      <GroceryStoreIcon icon={place.icon} size={17} color={sectionColors.groceries} />
-                    </View>
-                    <Text style={styles.placeName}>{displayPlaceName(place, t)}</Text>
+                <TouchableOpacity
+                  style={styles.placeNameRow}
+                  onPress={() => toggleCollapsed(place.id)}
+                  onLongPress={() => setIsReordering(true)}
+                >
+                  <Ionicons
+                    name={collapsed ? "chevron-forward" : "chevron-down"}
+                    size={16}
+                    color={colors.textFaint}
+                  />
+                  <View style={styles.placeIconCircle}>
+                    <GroceryStoreIcon icon={place.icon} size={17} color={sectionColors.groceries} />
                   </View>
+                  <Text style={styles.placeName}>{displayPlaceName(place, t)}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => openAddToPlace(place)} hitSlop={8}>
                   <Text style={styles.placeAddHint}>{t("groceries.addHint")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => openEditPlace(place)} hitSlop={8} style={styles.editIcon}>
                   <Ionicons name="create-outline" size={20} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
-              {rows.length === 0 ? (
-                <Text style={styles.emptyPlaceText}>{t("groceries.nothingHereYet")}</Text>
-              ) : (
-                rows.map((item) => (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    onToggle={() => toggleItem(item)}
-                    onDelete={() => removeFromList(item.id)}
-                  />
-                ))
-              )}
+              {!collapsed &&
+                (rows.length === 0 ? (
+                  <Text style={styles.emptyPlaceText}>{t("groceries.nothingHereYet")}</Text>
+                ) : (
+                  rows.map((item) => (
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      onToggle={() => toggleItem(item)}
+                      onDelete={() => removeFromList(item.id)}
+                    />
+                  ))
+                ))}
             </View>
           );
         }}
@@ -271,16 +330,10 @@ export default function GroceriesScreen() {
             </TouchableOpacity>
           )}
         </View>
-        <TextField
-          placeholder={t("groceries.itemNamePlaceholder")}
-          value={placeItemName}
-          onChangeText={setPlaceItemName}
-          autoFocus
-          onSubmitEditing={() => handleAddToPlace()}
-        />
+        <MultiGroceryItemEditor value={placeItemRows} onChange={setPlaceItemRows} tint={sectionColors.groceries} />
         <Button
           label={t("groceries.addItem")}
-          onPress={() => handleAddToPlace()}
+          onPress={handleSubmitPlaceRows}
           loading={isSubmitting}
           style={[styles.submitButton, styles.sectionButton]}
         />
@@ -289,15 +342,36 @@ export default function GroceriesScreen() {
           <>
             <FieldLabel icon="time-outline" label={t("groceries.previouslyAddedHere")} />
             <View style={styles.chipRow}>
-              {getHistoryForPlace(addingPlace.id).map((entry) => (
-                <Chip
-                  key={entry.id}
-                  label={entry.name}
-                  selected={false}
-                  onPress={() => handleAddToPlace(entry.name)}
-                  color={sectionColors.groceries}
-                />
-              ))}
+              <Chip
+                label={t("groceries.allCategories")}
+                selected={categoryFilter === null}
+                onPress={() => setCategoryFilter(null)}
+                color={sectionColors.groceries}
+              />
+              {Array.from(new Set(getHistoryForPlace(addingPlace.id).map((e) => e.itemCategory)))
+                .sort((a, b) => a.localeCompare(b))
+                .map((cat) => (
+                  <Chip
+                    key={cat}
+                    label={t(`groceries.itemCategories.${cat}`)}
+                    selected={categoryFilter === cat}
+                    onPress={() => setCategoryFilter(cat as GroceryItemCategory)}
+                    color={sectionColors.groceries}
+                  />
+                ))}
+            </View>
+            <View style={styles.chipRow}>
+              {getHistoryForPlace(addingPlace.id)
+                .filter((entry) => !categoryFilter || entry.itemCategory === categoryFilter)
+                .map((entry) => (
+                  <Chip
+                    key={entry.id}
+                    label={entry.name}
+                    selected={false}
+                    onPress={() => handleQuickAddToPlace(entry)}
+                    color={sectionColors.groceries}
+                  />
+                ))}
             </View>
           </>
         )}
@@ -312,6 +386,7 @@ export default function GroceriesScreen() {
           autoFocus
           onSubmitEditing={() => handleAddItem()}
         />
+        <GroceryItemCategoryPicker value={itemCategory} onChange={setItemCategory} tint={sectionColors.groceries} />
 
         <FieldLabel icon="storefront-outline" label={t("groceries.where")} />
         <View style={styles.chipRow}>
@@ -435,6 +510,39 @@ export default function GroceriesScreen() {
           })}
         </View>
       </BottomSheetModal>
+
+      <BottomSheetModal
+        visible={isReordering}
+        onClose={() => setIsReordering(false)}
+        scrollEnabled={reorderScrollEnabled}
+      >
+        <ModalTitle
+          icon="swap-vertical"
+          tint={sectionColors.groceries}
+          tintBackground={sectionTints.groceries}
+          title={t("groceries.reorderStores")}
+        />
+        <Text style={styles.reorderHint}>{t("groceries.reorderHint")}</Text>
+        <ReorderableList
+          data={[...places].filter((p) => !p.is_default).sort((a, b) => a.sort_order - b.sort_order)}
+          keyExtractor={(p) => p.id}
+          rowHeight={52}
+          onReorderStart={() => setReorderScrollEnabled(false)}
+          onReorderEnd={(newOrder) => {
+            setReorderScrollEnabled(true);
+            reorderPlaces(newOrder.map((p) => p.id));
+          }}
+          renderRow={(place, isActive) => (
+            <View style={[styles.reorderRow, isActive && styles.reorderRowActive]}>
+              <View style={styles.placeIconCircle}>
+                <GroceryStoreIcon icon={place.icon} size={17} color={sectionColors.groceries} />
+              </View>
+              <Text style={styles.placeName}>{displayPlaceName(place, t)}</Text>
+              <Ionicons name="reorder-three" size={20} color={colors.textFaint} />
+            </View>
+          )}
+        />
+      </BottomSheetModal>
     </View>
   );
 }
@@ -455,6 +563,16 @@ function ItemRow({ item, onToggle, onDelete }: { item: GroceryItem; onToggle: ()
         <View style={styles.rowTitleLine}>
           <Text style={[styles.rowTitle, item.is_checked && styles.rowTitleDone]}>{item.name}</Text>
           {isNewItem(item.created_at, item.created_by, profile) && <Text style={styles.newBadge}>{t("common.new")}</Text>}
+        </View>
+        <View style={styles.rowCategoryTag}>
+          <GroceryStoreIcon
+            icon={GROCERY_ITEM_CATEGORY_ICONS[item.item_category as GroceryItemCategory] ?? GROCERY_ITEM_CATEGORY_ICONS.other}
+            size={10}
+            color={colors.textFaint}
+          />
+          <Text style={styles.rowCategoryText}>
+            {t(`groceries.itemCategories.${isGroceryItemCategory(item.item_category) ? item.item_category : "other"}`)}
+          </Text>
         </View>
       </TouchableOpacity>
       <TouchableOpacity onPress={onDelete} hitSlop={8}>
@@ -477,8 +595,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: spacing.sm,
   },
-  placeHeaderMain: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  placeNameRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexShrink: 1 },
+  placeNameRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm },
   placeIconCircle: {
     width: 30,
     height: 30,
@@ -495,8 +612,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  placeName: { fontSize: 19, fontWeight: "800", color: sectionColors.groceries },
-  placeAddHint: { fontSize: 13, fontWeight: "700", color: sectionColors.groceries },
+  placeName: { fontSize: 19, fontWeight: "800", color: sectionColors.groceries, flexShrink: 1 },
+  placeAddHint: { fontSize: 13, fontWeight: "700", color: sectionColors.groceries, marginLeft: spacing.sm },
   changeIconRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.md },
   changeIconText: { fontSize: 14, fontWeight: "700", color: sectionColors.groceries },
   iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
@@ -510,6 +627,16 @@ const styles = StyleSheet.create({
   },
   iconOptionSelected: { backgroundColor: sectionColors.groceries },
   editIcon: { paddingLeft: spacing.md },
+  reorderHint: { fontSize: 13, color: colors.textMuted, marginBottom: spacing.sm },
+  reorderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    height: 52,
+    backgroundColor: colors.white,
+  },
+  reorderRowActive: { backgroundColor: sectionTints.groceries, borderRadius: radii.md },
   emptyPlaceText: { fontSize: 13, color: colors.textFaint, paddingBottom: spacing.sm },
   addPlaceRow: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
   addPlaceText: { fontSize: 19, fontWeight: "800", color: sectionColors.groceries },
@@ -536,6 +663,8 @@ const styles = StyleSheet.create({
   rowTitleLine: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   rowTitle: { fontSize: 16, color: colors.text },
   rowTitleDone: { textDecorationLine: "line-through", color: colors.textFaint },
+  rowCategoryTag: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
+  rowCategoryText: { fontSize: 11, color: colors.textFaint, fontWeight: "600" },
   newBadge: {
     fontSize: 10,
     fontWeight: "700",

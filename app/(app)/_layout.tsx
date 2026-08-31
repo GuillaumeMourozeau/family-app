@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { ProfileProvider, useProfile } from "@/hooks/useProfile";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useReminderScheduler } from "@/hooks/useReminderScheduler";
+import { OfflineSyncBanner } from "@/components/OfflineSyncBanner";
 
 function LoadingScreen() {
   return (
@@ -43,7 +44,12 @@ function FamilyGate({ children }: { children: React.ReactNode }) {
     return <Redirect href="/" />;
   }
 
-  return <>{children}</>;
+  return (
+    <View style={{ flex: 1 }}>
+      <OfflineSyncBanner />
+      {children}
+    </View>
+  );
 }
 
 export default function AppLayout() {

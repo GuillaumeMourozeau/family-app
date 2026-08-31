@@ -5,9 +5,10 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useTranslation } from "react-i18next";
 import { useTodos, type Todo, type TodoPriority } from "@/hooks/useTodos";
-import { useTodoCategories } from "@/hooks/useTodoCategories";
+import { useTodoCategories, type TodoCategory } from "@/hooks/useTodoCategories";
 import { useFamilyMembers, type FamilyMember } from "@/hooks/useFamilyMembers";
 import { useProfile } from "@/hooks/useProfile";
+import { useCollapsedSections } from "@/hooks/useCollapsedSections";
 import { getMemberColor, getTodoAssigneeColor, NEUTRAL_COLOR } from "@/lib/memberColors";
 import { isNewItem } from "@/lib/newBadge";
 import { toDateKey, dateKeyToDate, isToday, formatDate } from "@/lib/dateUtils";
@@ -21,6 +22,7 @@ import { Button } from "@/components/Button";
 import { TextField } from "@/components/TextField";
 import { TodoReminderPicker } from "@/components/TodoReminderPicker";
 import { TodoCategoryPicker } from "@/components/TodoCategoryPicker";
+import { ReorderableList } from "@/components/ReorderableList";
 import { colors, radii, sectionColors, sectionTints, spacing } from "@/lib/theme";
 
 const PRIORITY_COLORS: Record<TodoPriority, string> = {
@@ -41,8 +43,11 @@ const UNASSIGNED_FILTER = "unassigned";
 export default function TodosScreen() {
   const { t } = useTranslation();
   const { todos, isLoading, addTodo, toggleTodo, deleteTodo } = useTodos();
-  const { categories } = useTodoCategories();
+  const { categories, reorderCategories } = useTodoCategories();
   const { members } = useFamilyMembers();
+  const { isCollapsed, toggle: toggleCollapsed } = useCollapsedSections("todos");
+  const [isReordering, setIsReordering] = useState(false);
+  const [reorderScrollEnabled, setReorderScrollEnabled] = useState(true);
 
   const [isAdding, setIsAdding] = useState(false);
   const [title, setTitle] = useState("");
@@ -143,42 +148,53 @@ export default function TodosScreen() {
             {PRIORITY_ORDER.map((p) => {
               const items = byPriority.get(p) ?? [];
               if (items.length === 0) return null;
+              const sectionKey = `priority:${p}`;
+              const collapsed = isCollapsed(sectionKey);
               return (
                 <View key={p} style={styles.section}>
-                  <View style={styles.sectionTitleRow}>
+                  <TouchableOpacity style={styles.sectionTitleRow} onPress={() => toggleCollapsed(sectionKey)}>
+                    <Ionicons name={collapsed ? "chevron-forward" : "chevron-down"} size={14} color={colors.textFaint} />
                     <Ionicons name={PRIORITY_ICONS[p]} size={20} color={PRIORITY_COLORS[p]} />
                     <Text style={[styles.sectionTitle, { color: PRIORITY_COLORS[p] }]}>{t(`common.priority.${p}`)}</Text>
-                  </View>
-                  {items.map((todo) => (
-                    <TodoRow
-                      key={todo.id}
-                      todo={todo}
-                      members={members}
-                      onToggle={() => toggleTodo(todo)}
-                      onDelete={() => deleteTodo(todo.id)}
-                    />
-                  ))}
+                  </TouchableOpacity>
+                  {!collapsed &&
+                    items.map((todo) => (
+                      <TodoRow
+                        key={todo.id}
+                        todo={todo}
+                        members={members}
+                        onToggle={() => toggleTodo(todo)}
+                        onDelete={() => deleteTodo(todo.id)}
+                      />
+                    ))}
                 </View>
               );
             })}
             {categories.map((cat) => {
               const items = byCategory.get(cat.id) ?? [];
               if (items.length === 0) return null;
+              const collapsed = isCollapsed(cat.id);
               return (
                 <View key={cat.id} style={styles.section}>
-                  <View style={styles.sectionTitleRow}>
+                  <TouchableOpacity
+                    style={styles.sectionTitleRow}
+                    onPress={() => toggleCollapsed(cat.id)}
+                    onLongPress={() => setIsReordering(true)}
+                  >
+                    <Ionicons name={collapsed ? "chevron-forward" : "chevron-down"} size={14} color={colors.textFaint} />
                     <Ionicons name={cat.icon} size={20} color={sectionColors.todo} />
                     <Text style={[styles.sectionTitle, { color: sectionColors.todo }]}>{cat.name}</Text>
-                  </View>
-                  {items.map((todo) => (
-                    <TodoRow
-                      key={todo.id}
-                      todo={todo}
-                      members={members}
-                      onToggle={() => toggleTodo(todo)}
-                      onDelete={() => deleteTodo(todo.id)}
-                    />
-                  ))}
+                  </TouchableOpacity>
+                  {!collapsed &&
+                    items.map((todo) => (
+                      <TodoRow
+                        key={todo.id}
+                        todo={todo}
+                        members={members}
+                        onToggle={() => toggleTodo(todo)}
+                        onDelete={() => deleteTodo(todo.id)}
+                      />
+                    ))}
                 </View>
               );
             })}
@@ -245,6 +261,37 @@ export default function TodosScreen() {
         </View>
 
         <Button label={t("todo.addTask")} onPress={handleAddTodo} style={styles.submitButton} />
+      </BottomSheetModal>
+
+      <BottomSheetModal
+        visible={isReordering}
+        onClose={() => setIsReordering(false)}
+        scrollEnabled={reorderScrollEnabled}
+      >
+        <ModalTitle
+          icon="swap-vertical"
+          tint={sectionColors.todo}
+          tintBackground={sectionTints.todo}
+          title={t("todo.reorderCategories")}
+        />
+        <Text style={styles.reorderHint}>{t("todo.reorderHint")}</Text>
+        <ReorderableList
+          data={[...categories].sort((a, b) => a.sort_order - b.sort_order)}
+          keyExtractor={(c) => c.id}
+          rowHeight={52}
+          onReorderStart={() => setReorderScrollEnabled(false)}
+          onReorderEnd={(newOrder) => {
+            setReorderScrollEnabled(true);
+            reorderCategories(newOrder.map((c) => c.id));
+          }}
+          renderRow={(cat: TodoCategory, isActive) => (
+            <View style={[styles.reorderRow, isActive && styles.reorderRowActive]}>
+              <Ionicons name={cat.icon} size={18} color={sectionColors.todo} />
+              <Text style={styles.reorderRowText}>{cat.name}</Text>
+              <Ionicons name="reorder-three" size={20} color={colors.textFaint} />
+            </View>
+          )}
+        />
       </BottomSheetModal>
     </View>
   );
@@ -319,6 +366,17 @@ const styles = StyleSheet.create({
     fontSize: 19,
     fontWeight: "800",
   },
+  reorderHint: { fontSize: 13, color: colors.textMuted, marginBottom: spacing.sm },
+  reorderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    height: 52,
+    backgroundColor: colors.white,
+  },
+  reorderRowActive: { backgroundColor: sectionTints.todo, borderRadius: radii.md },
+  reorderRowText: { flex: 1, fontSize: 16, fontWeight: "700", color: colors.text },
   row: {
     flexDirection: "row",
     alignItems: "center",

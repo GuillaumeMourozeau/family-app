@@ -44,12 +44,12 @@ export function AddIngredientsToGroceriesModal({ visible, onClose, ingredients, 
     for (let i = 0; i < ingredients.length; i++) {
       if (!checked[i]) continue;
       const label = [ingredients[i].quantity, ingredients[i].name].filter(Boolean).join(" ");
-      await addItem(label, placeId, sourceMealEntryId);
+      await addItem(label, placeId, { sourceMealEntryId });
     }
     for (const row of customRows) {
       if (!row.name.trim()) continue;
       const label = [row.quantity, row.name].filter(Boolean).join(" ");
-      await addItem(label, placeId, sourceMealEntryId);
+      await addItem(label, placeId, { sourceMealEntryId });
     }
     setIsSaving(false);
     onClose();

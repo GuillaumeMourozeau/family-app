@@ -2,6 +2,10 @@ import { useCallback, useEffect, useId, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
 import type { RecurrenceEndType, RecurrenceFreq, RecurrenceRule } from "@/lib/recurrence";
+import { readCache, writeCache } from "@/lib/offline/cache";
+import { withOfflineQueue } from "@/lib/offline/mutate";
+import { offlineHandlers, type EventDeletePayload, type EventInsertPayload, type EventUpdatePayload } from "@/lib/offline/handlers";
+import { generateLocalId } from "@/lib/offline/id";
 
 export type CalendarEvent = {
   id: string;
@@ -52,16 +56,18 @@ export function useEvents() {
   const { profile } = useProfile();
   const familyId = profile?.family_id;
   const instanceId = useId();
+  const cacheKey = familyId ? `events:${familyId}` : null;
 
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const refetch = useCallback(async () => {
     if (!familyId) return;
-    const [{ data: eventsData }, { data: participantsData }] = await Promise.all([
+    const [{ data: eventsData, error }, { data: participantsData }] = await Promise.all([
       supabase.from("events").select("*").order("start_at", { ascending: true }),
       supabase.from("event_participants").select("event_id, profile_id"),
     ]);
+    if (error) return; // offline or request failed — keep showing cached/local state
 
     const participantsByEvent = new Map<string, string[]>();
     for (const row of participantsData ?? []) {
@@ -70,19 +76,31 @@ export function useEvents() {
       participantsByEvent.set(row.event_id, list);
     }
 
-    setEvents(
-      (eventsData ?? []).map((e) => ({
-        ...e,
-        participant_ids: participantsByEvent.get(e.id) ?? [],
-      }))
-    );
-    setIsLoading(false);
-  }, [familyId]);
+    const next = (eventsData ?? []).map((e) => ({
+      ...e,
+      participant_ids: participantsByEvent.get(e.id) ?? [],
+    }));
+    setEvents(next);
+    if (cacheKey) writeCache(cacheKey, next);
+  }, [familyId, cacheKey]);
 
   useEffect(() => {
     setIsLoading(true);
-    refetch();
+    let cancelled = false;
+    (async () => {
+      if (cacheKey) {
+        const cached = await readCache<CalendarEvent[]>(cacheKey);
+        if (cached && !cancelled) setEvents(cached);
+      }
+      await refetch();
+      if (!cancelled) setIsLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [familyId, cacheKey, refetch]);
 
+  useEffect(() => {
     if (!familyId) return;
 
     const channel = supabase
@@ -113,31 +131,38 @@ export function useEvents() {
   }) {
     if (!familyId || !profile) return;
 
-    const { data: event, error } = await supabase
-      .from("events")
-      .insert({
-        family_id: familyId,
-        title: input.title,
-        event_type: "general",
-        start_at: input.startAt.toISOString(),
-        end_at: input.endAt.toISOString(),
-        all_day: input.allDay,
-        applies_to_whole_family: input.appliesToWholeFamily,
-        created_by: profile.id,
-        is_private: input.isPrivate,
-        reminder_offsets_minutes: input.reminderOffsetsMinutes.length > 0 ? input.reminderOffsetsMinutes : null,
-        ...recurrenceToColumns(input.recurrence),
-      })
-      .select()
-      .single();
+    const id = generateLocalId();
+    const row = {
+      title: input.title,
+      event_type: "general",
+      start_at: input.startAt.toISOString(),
+      end_at: input.endAt.toISOString(),
+      all_day: input.allDay,
+      applies_to_whole_family: input.appliesToWholeFamily,
+      is_private: input.isPrivate,
+      reminder_offsets_minutes: input.reminderOffsetsMinutes.length > 0 ? input.reminderOffsetsMinutes : null,
+      ...recurrenceToColumns(input.recurrence),
+    };
+    const optimisticEvent: CalendarEvent = {
+      id,
+      description: null,
+      location: null,
+      created_by: profile.id,
+      created_at: new Date().toISOString(),
+      participant_ids: input.appliesToWholeFamily ? [] : input.participantIds,
+      ...row,
+    };
+    setEvents((prev) => [...prev, optimisticEvent].sort((a, b) => a.start_at.localeCompare(b.start_at)));
 
-    if (error || !event) return;
-
-    if (!input.appliesToWholeFamily && input.participantIds.length > 0) {
-      await supabase
-        .from("event_participants")
-        .insert(input.participantIds.map((profileId) => ({ event_id: event.id, profile_id: profileId })));
-    }
+    const payload: EventInsertPayload = {
+      id,
+      familyId,
+      createdBy: profile.id,
+      row,
+      participantIds: input.participantIds,
+      appliesToWholeFamily: input.appliesToWholeFamily,
+    };
+    await withOfflineQueue("events:add", payload, () => offlineHandlers["events:add"](payload));
   }
 
   async function updateEvent(
@@ -156,37 +181,38 @@ export function useEvents() {
       reminderOffsetsMinutes: number[];
     }
   ) {
-    const { error } = await supabase
-      .from("events")
-      .update({
-        title: input.title,
-        start_at: input.startAt.toISOString(),
-        end_at: input.endAt.toISOString(),
-        all_day: input.allDay,
-        applies_to_whole_family: input.appliesToWholeFamily,
-        description: input.description,
-        location: input.location,
-        is_private: input.isPrivate,
-        reminder_offsets_minutes: input.reminderOffsetsMinutes.length > 0 ? input.reminderOffsetsMinutes : null,
-        ...recurrenceToColumns(input.recurrence),
-      })
-      .eq("id", id);
+    const row = {
+      title: input.title,
+      start_at: input.startAt.toISOString(),
+      end_at: input.endAt.toISOString(),
+      all_day: input.allDay,
+      applies_to_whole_family: input.appliesToWholeFamily,
+      description: input.description,
+      location: input.location,
+      is_private: input.isPrivate,
+      reminder_offsets_minutes: input.reminderOffsetsMinutes.length > 0 ? input.reminderOffsetsMinutes : null,
+      ...recurrenceToColumns(input.recurrence),
+    };
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === id ? { ...e, ...row, participant_ids: input.appliesToWholeFamily ? [] : input.participantIds } : e
+      )
+    );
 
-    if (error) return;
-
-    await supabase.from("event_participants").delete().eq("event_id", id);
-    if (!input.appliesToWholeFamily && input.participantIds.length > 0) {
-      await supabase
-        .from("event_participants")
-        .insert(input.participantIds.map((profileId) => ({ event_id: id, profile_id: profileId })));
-    }
+    const payload: EventUpdatePayload = {
+      id,
+      row,
+      participantIds: input.participantIds,
+      appliesToWholeFamily: input.appliesToWholeFamily,
+    };
+    await withOfflineQueue("events:update", payload, () => offlineHandlers["events:update"](payload));
     refetch();
   }
 
   async function deleteEvent(id: string) {
     setEvents((prev) => prev.filter((e) => e.id !== id));
-    const { error } = await supabase.from("events").delete().eq("id", id);
-    if (error) refetch();
+    const payload: EventDeletePayload = { id };
+    await withOfflineQueue("events:delete", payload, () => offlineHandlers["events:delete"](payload));
   }
 
   return { events, isLoading, addEvent, updateEvent, deleteEvent, refetch };

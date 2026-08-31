@@ -3,6 +3,10 @@ import { useFocusEffect } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
 import type { TodoReminder, TodoReminderFreq } from "@/lib/reminders";
+import { readCache, writeCache } from "@/lib/offline/cache";
+import { withOfflineQueue } from "@/lib/offline/mutate";
+import { offlineHandlers, type DeletePayload, type InsertPayload, type UpdatePayload } from "@/lib/offline/handlers";
+import { generateLocalId } from "@/lib/offline/id";
 
 export type TodoPriority = "urgent" | "soon" | "whenever";
 
@@ -37,21 +41,36 @@ export function useTodos() {
   const { profile } = useProfile();
   const familyId = profile?.family_id;
   const instanceId = useId();
+  const cacheKey = familyId ? `todos:${familyId}` : null;
 
   const [todos, setTodos] = useState<Todo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const refetch = useCallback(async () => {
     if (!familyId) return;
-    const { data } = await supabase.from("todos").select("*").order("created_at", { ascending: true });
+    const { data, error } = await supabase.from("todos").select("*").order("created_at", { ascending: true });
+    if (error) return;
     setTodos(data ?? []);
-    setIsLoading(false);
-  }, [familyId]);
+    if (cacheKey) writeCache(cacheKey, data ?? []);
+  }, [familyId, cacheKey]);
 
   useEffect(() => {
     setIsLoading(true);
-    refetch();
+    let cancelled = false;
+    (async () => {
+      if (cacheKey) {
+        const cached = await readCache<Todo[]>(cacheKey);
+        if (cached && !cancelled) setTodos(cached);
+      }
+      await refetch();
+      if (!cancelled) setIsLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [familyId, cacheKey, refetch]);
 
+  useEffect(() => {
     if (!familyId) return;
 
     const channel = supabase
@@ -84,22 +103,21 @@ export function useTodos() {
     dueDate: string | null = null
   ) {
     if (!familyId || !profile) return;
-    const { data, error } = await supabase
-      .from("todos")
-      .insert({
-        family_id: familyId,
-        title,
-        assigned_to: assignedTo,
-        priority,
-        category_id: categoryId,
-        due_date: dueDate,
-        created_by: profile.id,
-        is_private: isPrivate,
-        ...reminderToColumns(reminder),
-      })
-      .select()
-      .single();
-    if (!error && data) setTodos((prev) => [...prev, data]);
+    const id = generateLocalId();
+    const row = {
+      title,
+      assigned_to: assignedTo,
+      priority,
+      category_id: categoryId,
+      due_date: dueDate,
+      is_private: isPrivate,
+      ...reminderToColumns(reminder),
+    };
+    const optimisticTodo: Todo = { id, description: null, created_by: profile.id, created_at: new Date().toISOString(), is_complete: false, ...row };
+    setTodos((prev) => [...prev, optimisticTodo]);
+
+    const payload: InsertPayload = { id, familyId, createdBy: profile.id, row };
+    await withOfflineQueue("todos:add", payload, () => offlineHandlers["todos:add"](payload));
   }
 
   async function toggleTodo(todo: Todo) {
@@ -108,17 +126,14 @@ export function useTodos() {
     setTodos((prev) =>
       prev.map((t) => (t.id === todo.id ? { ...t, is_complete: nextComplete, completed_at: nextCompletedAt } : t))
     );
-    const { error } = await supabase
-      .from("todos")
-      .update({ is_complete: nextComplete, completed_at: nextCompletedAt })
-      .eq("id", todo.id);
-    if (error) refetch();
+    const payload = { id: todo.id, isComplete: nextComplete, completedAt: nextCompletedAt };
+    await withOfflineQueue("todos:toggle", payload, () => offlineHandlers["todos:toggle"](payload));
   }
 
   async function deleteTodo(id: string) {
     setTodos((prev) => prev.filter((t) => t.id !== id));
-    const { error } = await supabase.from("todos").delete().eq("id", id);
-    if (error) refetch();
+    const payload: DeletePayload = { id };
+    await withOfflineQueue("todos:delete", payload, () => offlineHandlers["todos:delete"](payload));
   }
 
   async function updateTodo(
@@ -134,19 +149,19 @@ export function useTodos() {
       reminder: TodoReminder | null;
     }
   ) {
-    await supabase
-      .from("todos")
-      .update({
-        title: input.title,
-        assigned_to: input.assignedTo,
-        priority: input.priority,
-        category_id: input.categoryId,
-        due_date: input.dueDate,
-        description: input.description,
-        is_private: input.isPrivate,
-        ...reminderToColumns(input.reminder),
-      })
-      .eq("id", id);
+    const row = {
+      title: input.title,
+      assigned_to: input.assignedTo,
+      priority: input.priority,
+      category_id: input.categoryId,
+      due_date: input.dueDate,
+      description: input.description,
+      is_private: input.isPrivate,
+      ...reminderToColumns(input.reminder),
+    };
+    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, ...row } : t)));
+    const payload: UpdatePayload = { id, row };
+    await withOfflineQueue("todos:update", payload, () => offlineHandlers["todos:update"](payload));
   }
 
   return { todos, isLoading, addTodo, toggleTodo, deleteTodo, updateTodo, refetch };

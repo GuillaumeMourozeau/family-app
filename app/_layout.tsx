@@ -7,6 +7,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ErrorScreen } from "@/components/ErrorScreen";
 import { setGlobalErrorListener } from "@/lib/globalErrorHandler";
 import { initI18n } from "@/lib/i18n";
+import { initOfflineSync } from "@/lib/offline/queue";
+import { offlineHandlers } from "@/lib/offline/handlers";
 
 export default function RootLayout() {
   const [globalError, setGlobalError] = useState<Error | null>(null);
@@ -20,6 +22,11 @@ export default function RootLayout() {
   useEffect(() => {
     initI18n().then(() => setIsI18nReady(true));
   }, []);
+
+  // Replays anything queued from a previous offline session on launch, and
+  // again whenever connectivity comes back — regardless of which tabs are
+  // currently mounted, since this only needs supabase + AsyncStorage.
+  useEffect(() => initOfflineSync(offlineHandlers), []);
 
   if (globalError) {
     return <ErrorScreen error={globalError} />;

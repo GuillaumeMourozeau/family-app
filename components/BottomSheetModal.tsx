@@ -23,9 +23,13 @@ type Props = {
   // (scrolling to the bottom of a tall, dynamically-growing form was
   // unreliable enough to be a real bug people hit).
   footer?: ReactNode;
+  // Turn off while a child (e.g. a drag-to-reorder list) is handling its
+  // own pan gesture, so the outer ScrollView doesn't compete with it for
+  // the touch responder.
+  scrollEnabled?: boolean;
 };
 
-export function BottomSheetModal({ visible, onClose, children, contentStyle, footer }: Props) {
+export function BottomSheetModal({ visible, onClose, children, contentStyle, footer, scrollEnabled = true }: Props) {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
@@ -44,6 +48,7 @@ export function BottomSheetModal({ visible, onClose, children, contentStyle, foo
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            scrollEnabled={scrollEnabled}
           >
             {children}
           </ScrollView>

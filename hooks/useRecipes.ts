@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
 import type { RecipeCategory } from "@/lib/recipeCategories";
+import { readCache, writeCache } from "@/lib/offline/cache";
 
 export type RecipeIngredient = {
   id: string;
@@ -27,15 +28,17 @@ export function useRecipes() {
   const familyId = profile?.family_id;
   const instanceId = useId();
 
+  const cacheKey = familyId ? `recipes:${familyId}` : null;
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const refetch = useCallback(async () => {
     if (!familyId) return;
-    const { data: recipeRows } = await supabase
+    const { data: recipeRows, error: recipesError } = await supabase
       .from("recipes")
       .select("*")
       .order("name", { ascending: true });
+    if (recipesError) return; // offline or request failed — keep showing cached/local state
     const recipeIds = (recipeRows ?? []).map((r) => r.id);
     const { data: ingredientRows } =
       recipeIds.length > 0
@@ -51,13 +54,28 @@ export function useRecipes() {
       list.push(ing);
       ingredientsByRecipe.set(ing.recipe_id, list);
     }
-    setRecipes((recipeRows ?? []).map((r) => ({ ...r, ingredients: ingredientsByRecipe.get(r.id) ?? [] })));
-    setIsLoading(false);
-  }, [familyId]);
+    const next = (recipeRows ?? []).map((r) => ({ ...r, ingredients: ingredientsByRecipe.get(r.id) ?? [] }));
+    setRecipes(next);
+    if (cacheKey) writeCache(cacheKey, next);
+  }, [familyId, cacheKey]);
 
   useEffect(() => {
     setIsLoading(true);
-    refetch();
+    let cancelled = false;
+    (async () => {
+      if (cacheKey) {
+        const cached = await readCache<Recipe[]>(cacheKey);
+        if (cached && !cancelled) setRecipes(cached);
+      }
+      await refetch();
+      if (!cancelled) setIsLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [familyId, cacheKey, refetch]);
+
+  useEffect(() => {
     if (!familyId) return;
     const channel = supabase
       .channel(`recipes:${familyId}:${instanceId}`)
