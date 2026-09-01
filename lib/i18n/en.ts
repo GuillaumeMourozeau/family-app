@@ -196,6 +196,8 @@ export default {
     addTo: "Add to {{place}}",
     itemNamePlaceholder: "Item name",
     addItem: "Add item",
+    addSelectedItems_one: "Add {{count}} item",
+    addSelectedItems_other: "Add {{count}} items",
     previouslyAddedHere: "Previously added here",
     newItem: "New item",
     where: "Where",

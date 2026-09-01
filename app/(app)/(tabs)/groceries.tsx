@@ -60,6 +60,7 @@ export default function GroceriesScreen() {
   const [addingPlace, setAddingPlace] = useState<GroceryPlace | null>(null);
   const [placeItemRows, setPlaceItemRows] = useState<MultiGroceryRow[]>([emptyGroceryRow()]);
   const [categoryFilter, setCategoryFilter] = useState<GroceryItemCategory | null>(null);
+  const [selectedHistoryIds, setSelectedHistoryIds] = useState<Set<string>>(new Set());
 
   const [isAddingPlace, setIsAddingPlace] = useState(false);
   const [newPlaceName, setNewPlaceName] = useState("");
@@ -119,20 +120,37 @@ export default function GroceriesScreen() {
   function openAddToPlace(place: GroceryPlace) {
     setPlaceItemRows([emptyGroceryRow()]);
     setCategoryFilter(null);
+    setSelectedHistoryIds(new Set());
     setAddingPlace(place);
   }
 
-  // Tapping a "previously added here" suggestion adds it immediately —
-  // faster than routing it through the multi-row editor below.
-  async function handleQuickAddToPlace(entry: GroceryHistoryEntry) {
-    if (!addingPlace || isSubmitting) return;
+  // Tapping a "previously added here" suggestion just toggles its selected
+  // state — nothing is added until "Add selected" is pressed, so the user
+  // can tap through several suggestions in one pass instead of the sheet
+  // closing after the first one.
+  function toggleHistorySelection(entry: GroceryHistoryEntry) {
+    setSelectedHistoryIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(entry.id)) next.delete(entry.id);
+      else next.add(entry.id);
+      return next;
+    });
+  }
+
+  async function handleAddSelectedHistoryEntries() {
+    if (!addingPlace || isSubmitting || selectedHistoryIds.size === 0) return;
+    const entries = getHistoryForPlace(addingPlace.id).filter((entry) => selectedHistoryIds.has(entry.id));
     setIsSubmitting(true);
-    const result = await addItem(entry.name, addingPlace.id, { itemCategory: entry.itemCategory });
-    setIsSubmitting(false);
-    if (result?.error) {
-      Alert.alert(t("groceries.couldntAddItem"), result.error);
-      return;
+    for (const entry of entries) {
+      const result = await addItem(entry.name, addingPlace.id, { itemCategory: entry.itemCategory });
+      if (result?.error) {
+        setIsSubmitting(false);
+        Alert.alert(t("groceries.couldntAddItem"), result.error);
+        return;
+      }
     }
+    setIsSubmitting(false);
+    setSelectedHistoryIds(new Set());
     setAddingPlace(null);
   }
 
@@ -339,7 +357,17 @@ export default function GroceriesScreen() {
             entries={getHistoryForPlace(addingPlace.id)}
             categoryFilter={categoryFilter}
             onSelectCategoryFilter={setCategoryFilter}
-            onSelectEntry={handleQuickAddToPlace}
+            selectedIds={selectedHistoryIds}
+            onToggleEntry={toggleHistorySelection}
+          />
+        )}
+
+        {selectedHistoryIds.size > 0 && (
+          <Button
+            label={t("groceries.addSelectedItems", { count: selectedHistoryIds.size })}
+            onPress={handleAddSelectedHistoryEntries}
+            loading={isSubmitting}
+            style={[styles.submitButton, styles.sectionButton]}
           />
         )}
       </BottomSheetModal>
@@ -560,12 +588,14 @@ function PreviouslyAddedSection({
   entries,
   categoryFilter,
   onSelectCategoryFilter,
-  onSelectEntry,
+  selectedIds,
+  onToggleEntry,
 }: {
   entries: GroceryHistoryEntry[];
   categoryFilter: GroceryItemCategory | null;
   onSelectCategoryFilter: (category: GroceryItemCategory | null) => void;
-  onSelectEntry: (entry: GroceryHistoryEntry) => void;
+  selectedIds: Set<string>;
+  onToggleEntry: (entry: GroceryHistoryEntry) => void;
 }) {
   const { t } = useTranslation();
   const categories = Array.from(new Set(entries.map((e) => e.itemCategory))).sort((a, b) => a.localeCompare(b));
@@ -607,24 +637,35 @@ function PreviouslyAddedSection({
       </View>
 
       <View style={styles.suggestionList}>
-        {filtered.map((entry) => (
-          <TouchableOpacity key={entry.id} style={styles.suggestionRow} onPress={() => onSelectEntry(entry)}>
-            <Ionicons name="add-circle-outline" size={18} color={sectionColors.groceries} />
-            <Text style={styles.suggestionName} numberOfLines={1}>
-              {entry.name}
-            </Text>
-            <View style={styles.rowCategoryTag}>
-              <GroceryStoreIcon
-                icon={GROCERY_ITEM_CATEGORY_ICONS[entry.itemCategory as GroceryItemCategory] ?? GROCERY_ITEM_CATEGORY_ICONS.other}
-                size={10}
-                color={colors.textFaint}
+        {filtered.map((entry) => {
+          const selected = selectedIds.has(entry.id);
+          return (
+            <TouchableOpacity
+              key={entry.id}
+              style={[styles.suggestionRow, selected && styles.suggestionRowSelected]}
+              onPress={() => onToggleEntry(entry)}
+            >
+              <Ionicons
+                name={selected ? "checkmark-circle" : "ellipse-outline"}
+                size={18}
+                color={selected ? sectionColors.groceries : colors.textFaint}
               />
-              <Text style={styles.rowCategoryText}>
-                {t(`groceries.itemCategories.${isGroceryItemCategory(entry.itemCategory) ? entry.itemCategory : "other"}`)}
+              <Text style={styles.suggestionName} numberOfLines={1}>
+                {entry.name}
               </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+              <View style={styles.rowCategoryTag}>
+                <GroceryStoreIcon
+                  icon={GROCERY_ITEM_CATEGORY_ICONS[entry.itemCategory as GroceryItemCategory] ?? GROCERY_ITEM_CATEGORY_ICONS.other}
+                  size={10}
+                  color={colors.textFaint}
+                />
+                <Text style={styles.rowCategoryText}>
+                  {t(`groceries.itemCategories.${isGroceryItemCategory(entry.itemCategory) ? entry.itemCategory : "other"}`)}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -760,9 +801,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
+  suggestionRowSelected: { backgroundColor: sectionTints.groceries, borderRadius: radii.md, borderBottomColor: "transparent" },
   suggestionName: { flex: 1, fontSize: 15, color: colors.text },
   submitButton: { marginTop: spacing.sm },
   sectionButton: { backgroundColor: sectionColors.groceries },

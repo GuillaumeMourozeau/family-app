@@ -196,6 +196,8 @@ export default {
     addTo: "Ajouter à {{place}}",
     itemNamePlaceholder: "Nom de l'article",
     addItem: "Ajouter l'article",
+    addSelectedItems_one: "Ajouter {{count}} article",
+    addSelectedItems_other: "Ajouter {{count}} articles",
     previouslyAddedHere: "Déjà ajoutés ici",
     newItem: "Nouvel article",
     where: "Où",
