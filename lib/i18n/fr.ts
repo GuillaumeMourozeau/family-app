@@ -216,7 +216,7 @@ export default {
     removeItemTitle: "Retirer « {{name}} » ?",
     removeItemMessage: "Il est toujours dans votre liste — cela le supprimera complètement.",
     deletePlaceTitle: "Supprimer ce lieu ?",
-    deletePlaceMessage: "Les articles ici seront déplacés vers Ailleurs.",
+    deletePlaceMessage: "Les articles ici seront déplacés vers un autre magasin.",
     anywhere: "Ailleurs",
     item: "Article",
     itemNotFound: "Article introuvable",
@@ -233,7 +233,8 @@ export default {
     addToList: "Ajouter à la liste",
     chooseCategory: "Choisir une catégorie",
     allCategories: "Toutes les catégories",
-    addAnotherItem: "+ Ajouter un autre article",
+    sortByCategory: "Trier par catégorie",
+    addAnotherItem: "Ajouter un autre article",
     itemCategories: {
       fruits: "Fruits",
       vegetables: "Légumes",

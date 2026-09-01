@@ -312,11 +312,7 @@ export default function GroceriesScreen() {
         }
       />
 
-      <BottomSheetModal
-        visible={!!addingPlace}
-        onClose={() => setAddingPlace(null)}
-        contentStyle={styles.modalContentScrollable}
-      >
+      <BottomSheetModal visible={!!addingPlace} onClose={() => setAddingPlace(null)}>
         <View style={styles.modalHeaderRow}>
           <ModalTitle
             icon="storefront-outline"
@@ -339,41 +335,12 @@ export default function GroceriesScreen() {
         />
 
         {addingPlace && getHistoryForPlace(addingPlace.id).length > 0 && (
-          <>
-            <FieldLabel icon="time-outline" label={t("groceries.previouslyAddedHere")} />
-            <View style={styles.chipRow}>
-              <Chip
-                label={t("groceries.allCategories")}
-                selected={categoryFilter === null}
-                onPress={() => setCategoryFilter(null)}
-                color={sectionColors.groceries}
-              />
-              {Array.from(new Set(getHistoryForPlace(addingPlace.id).map((e) => e.itemCategory)))
-                .sort((a, b) => a.localeCompare(b))
-                .map((cat) => (
-                  <Chip
-                    key={cat}
-                    label={t(`groceries.itemCategories.${cat}`)}
-                    selected={categoryFilter === cat}
-                    onPress={() => setCategoryFilter(cat as GroceryItemCategory)}
-                    color={sectionColors.groceries}
-                  />
-                ))}
-            </View>
-            <View style={styles.chipRow}>
-              {getHistoryForPlace(addingPlace.id)
-                .filter((entry) => !categoryFilter || entry.itemCategory === categoryFilter)
-                .map((entry) => (
-                  <Chip
-                    key={entry.id}
-                    label={entry.name}
-                    selected={false}
-                    onPress={() => handleQuickAddToPlace(entry)}
-                    color={sectionColors.groceries}
-                  />
-                ))}
-            </View>
-          </>
+          <PreviouslyAddedSection
+            entries={getHistoryForPlace(addingPlace.id)}
+            categoryFilter={categoryFilter}
+            onSelectCategoryFilter={setCategoryFilter}
+            onSelectEntry={handleQuickAddToPlace}
+          />
         )}
       </BottomSheetModal>
 
@@ -465,7 +432,7 @@ export default function GroceriesScreen() {
           style={[styles.submitButton, styles.sectionButton]}
         />
 
-        {editingPlace && !editingPlace.is_default && (
+        {editingPlace && places.length > 1 && (
           <Button label={t("groceries.deletePlace")} variant="danger" onPress={handleDeletePlace} style={styles.submitButton} />
         )}
 
@@ -560,24 +527,105 @@ function ItemRow({ item, onToggle, onDelete }: { item: GroceryItem; onToggle: ()
         {item.is_checked && <Text style={styles.checkmark}>✓</Text>}
       </TouchableOpacity>
       <TouchableOpacity style={styles.rowMain} onPress={() => router.push(`/grocery/${item.id}`)}>
-        <View style={styles.rowTitleLine}>
-          <Text style={[styles.rowTitle, item.is_checked && styles.rowTitleDone]}>{item.name}</Text>
-          {isNewItem(item.created_at, item.created_by, profile) && <Text style={styles.newBadge}>{t("common.new")}</Text>}
-        </View>
-        <View style={styles.rowCategoryTag}>
-          <GroceryStoreIcon
-            icon={GROCERY_ITEM_CATEGORY_ICONS[item.item_category as GroceryItemCategory] ?? GROCERY_ITEM_CATEGORY_ICONS.other}
-            size={10}
-            color={colors.textFaint}
-          />
-          <Text style={styles.rowCategoryText}>
-            {t(`groceries.itemCategories.${isGroceryItemCategory(item.item_category) ? item.item_category : "other"}`)}
-          </Text>
+        <View style={styles.rowContentLine}>
+          <View style={styles.rowTitleLine}>
+            <Text style={[styles.rowTitle, item.is_checked && styles.rowTitleDone]} numberOfLines={1}>
+              {item.name}
+            </Text>
+            {isNewItem(item.created_at, item.created_by, profile) && <Text style={styles.newBadge}>{t("common.new")}</Text>}
+          </View>
+          <View style={styles.rowCategoryTag}>
+            <GroceryStoreIcon
+              icon={GROCERY_ITEM_CATEGORY_ICONS[item.item_category as GroceryItemCategory] ?? GROCERY_ITEM_CATEGORY_ICONS.other}
+              size={10}
+              color={colors.textFaint}
+            />
+            <Text style={styles.rowCategoryText}>
+              {t(`groceries.itemCategories.${isGroceryItemCategory(item.item_category) ? item.item_category : "other"}`)}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
       <TouchableOpacity onPress={onDelete} hitSlop={8}>
         <Text style={styles.deleteLink}>✕</Text>
       </TouchableOpacity>
+    </View>
+  );
+}
+
+// Category chips (the "sorter") are deliberately a different shape/weight
+// than the item rows below them — a category is a broader, more important
+// choice than any one item, so it shouldn't look like just another item.
+function PreviouslyAddedSection({
+  entries,
+  categoryFilter,
+  onSelectCategoryFilter,
+  onSelectEntry,
+}: {
+  entries: GroceryHistoryEntry[];
+  categoryFilter: GroceryItemCategory | null;
+  onSelectCategoryFilter: (category: GroceryItemCategory | null) => void;
+  onSelectEntry: (entry: GroceryHistoryEntry) => void;
+}) {
+  const { t } = useTranslation();
+  const categories = Array.from(new Set(entries.map((e) => e.itemCategory))).sort((a, b) => a.localeCompare(b));
+  const filtered = entries.filter((entry) => !categoryFilter || entry.itemCategory === categoryFilter);
+
+  return (
+    <View>
+      <FieldLabel icon="time-outline" label={t("groceries.previouslyAddedHere")} />
+
+      <FieldLabel icon="funnel-outline" label={t("groceries.sortByCategory")} />
+      <View style={styles.categoryFilterRow}>
+        <TouchableOpacity
+          style={[styles.categoryFilterChip, categoryFilter === null && styles.categoryFilterChipSelected]}
+          onPress={() => onSelectCategoryFilter(null)}
+        >
+          <Text style={[styles.categoryFilterText, categoryFilter === null && styles.categoryFilterTextSelected]}>
+            {t("groceries.allCategories")}
+          </Text>
+        </TouchableOpacity>
+        {categories.map((cat) => {
+          const selected = categoryFilter === cat;
+          return (
+            <TouchableOpacity
+              key={cat}
+              style={[styles.categoryFilterChip, selected && styles.categoryFilterChipSelected]}
+              onPress={() => onSelectCategoryFilter(cat as GroceryItemCategory)}
+            >
+              <GroceryStoreIcon
+                icon={GROCERY_ITEM_CATEGORY_ICONS[cat as GroceryItemCategory] ?? GROCERY_ITEM_CATEGORY_ICONS.other}
+                size={14}
+                color={selected ? colors.white : sectionColors.groceries}
+              />
+              <Text style={[styles.categoryFilterText, selected && styles.categoryFilterTextSelected]}>
+                {t(`groceries.itemCategories.${cat}`)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <View style={styles.suggestionList}>
+        {filtered.map((entry) => (
+          <TouchableOpacity key={entry.id} style={styles.suggestionRow} onPress={() => onSelectEntry(entry)}>
+            <Ionicons name="add-circle-outline" size={18} color={sectionColors.groceries} />
+            <Text style={styles.suggestionName} numberOfLines={1}>
+              {entry.name}
+            </Text>
+            <View style={styles.rowCategoryTag}>
+              <GroceryStoreIcon
+                icon={GROCERY_ITEM_CATEGORY_ICONS[entry.itemCategory as GroceryItemCategory] ?? GROCERY_ITEM_CATEGORY_ICONS.other}
+                size={10}
+                color={colors.textFaint}
+              />
+              <Text style={styles.rowCategoryText}>
+                {t(`groceries.itemCategories.${isGroceryItemCategory(entry.itemCategory) ? entry.itemCategory : "other"}`)}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
     </View>
   );
 }
@@ -660,10 +708,11 @@ const styles = StyleSheet.create({
   },
   checkboxChecked: { backgroundColor: colors.success, borderColor: colors.success },
   checkmark: { color: colors.white, fontSize: 14, fontWeight: "700" },
-  rowTitleLine: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  rowTitle: { fontSize: 16, color: colors.text },
+  rowContentLine: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+  rowTitleLine: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexShrink: 1 },
+  rowTitle: { fontSize: 16, color: colors.text, flexShrink: 1 },
   rowTitleDone: { textDecorationLine: "line-through", color: colors.textFaint },
-  rowCategoryTag: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
+  rowCategoryTag: { flexDirection: "row", alignItems: "center", gap: 3, flexShrink: 0 },
   rowCategoryText: { fontSize: 11, color: colors.textFaint, fontWeight: "600" },
   newBadge: {
     fontSize: 10,
@@ -690,6 +739,31 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderLight,
   },
   historyText: { fontSize: 14, color: colors.text },
+  categoryFilterRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  categoryFilterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.lg,
+    borderWidth: 1.5,
+    borderColor: sectionColors.groceries,
+    backgroundColor: colors.white,
+  },
+  categoryFilterChipSelected: { backgroundColor: sectionColors.groceries },
+  categoryFilterText: { fontSize: 14, fontWeight: "800", color: sectionColors.groceries },
+  categoryFilterTextSelected: { color: colors.white },
+  suggestionList: { marginTop: spacing.xs },
+  suggestionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.sm + 2,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  suggestionName: { flex: 1, fontSize: 15, color: colors.text },
   submitButton: { marginTop: spacing.sm },
   sectionButton: { backgroundColor: sectionColors.groceries },
 });

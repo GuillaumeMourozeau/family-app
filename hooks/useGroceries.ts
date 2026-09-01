@@ -180,12 +180,25 @@ export function useGroceries() {
 
   async function deletePlace(id: string) {
     const place = places.find((p) => p.id === id);
-    if (!place || place.is_default || !defaultPlace) return { error: "This place can't be deleted." };
+    if (!place) return { error: "This place can't be deleted." };
+    const remainingPlaces = places.filter((p) => p.id !== id);
+    if (remainingPlaces.length === 0) return { error: "You need at least one store." };
 
-    setItems((prev) => prev.map((i) => (i.category_id === id ? { ...i, category_id: defaultPlace.id } : i)));
-    setPlaces((prev) => prev.filter((p) => p.id !== id));
+    // Deleting the default place ("Anywhere") is allowed — another place
+    // just takes over as the fallback for unassigned items, so there's
+    // always exactly one default to reassign to.
+    const isDeletingDefault = place.is_default;
+    const newDefault = isDeletingDefault
+      ? [...remainingPlaces].sort((a, b) => a.sort_order - b.sort_order)[0]
+      : defaultPlace;
+    if (!newDefault) return { error: "This place can't be deleted." };
 
-    const payload = { id, reassignItemsToId: defaultPlace.id };
+    setItems((prev) => prev.map((i) => (i.category_id === id ? { ...i, category_id: newDefault.id } : i)));
+    setPlaces((prev) =>
+      prev.filter((p) => p.id !== id).map((p) => (isDeletingDefault ? { ...p, is_default: p.id === newDefault.id } : p))
+    );
+
+    const payload = { id, reassignItemsToId: newDefault.id, promoteToDefaultId: isDeletingDefault ? newDefault.id : null };
     await withOfflineQueue("groceryPlaces:delete", payload, () => offlineHandlers["groceryPlaces:delete"](payload));
     return { error: null };
   }

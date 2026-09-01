@@ -216,7 +216,7 @@ export default {
     removeItemTitle: "Remove \"{{name}}\"?",
     removeItemMessage: "It's still on your list — this will remove it entirely.",
     deletePlaceTitle: "Delete this place?",
-    deletePlaceMessage: "Items here will move to Anywhere.",
+    deletePlaceMessage: "Items here will move to another store.",
     anywhere: "Anywhere",
     item: "Item",
     itemNotFound: "Item not found",
@@ -233,7 +233,8 @@ export default {
     addToList: "Add to list",
     chooseCategory: "Choose a category",
     allCategories: "All categories",
-    addAnotherItem: "+ Add another item",
+    sortByCategory: "Sort by category",
+    addAnotherItem: "Add another item",
     itemCategories: {
       fruits: "Fruits",
       vegetables: "Vegetables",

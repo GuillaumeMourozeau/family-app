@@ -101,10 +101,13 @@ export const offlineHandlers: Record<string, (payload: any) => Promise<void>> = 
   "groceryPlaces:update": async (payload: UpdatePayload) => {
     throwIfError(await supabase.from("grocery_categories").update(payload.row).eq("id", payload.id));
   },
-  "groceryPlaces:delete": async (payload: { id: string; reassignItemsToId: string }) => {
+  "groceryPlaces:delete": async (payload: { id: string; reassignItemsToId: string; promoteToDefaultId: string | null }) => {
     throwIfError(
       await supabase.from("grocery_items").update({ category_id: payload.reassignItemsToId }).eq("category_id", payload.id)
     );
+    if (payload.promoteToDefaultId) {
+      throwIfError(await supabase.from("grocery_categories").update({ is_default: true }).eq("id", payload.promoteToDefaultId));
+    }
     throwIfError(await supabase.from("grocery_categories").delete().eq("id", payload.id));
   },
 
