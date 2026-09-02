@@ -3,6 +3,9 @@ import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/hooks/useProfile";
 import type { RecipeCategory } from "@/lib/recipeCategories";
 import { readCache, writeCache } from "@/lib/offline/cache";
+import { withOfflineQueue } from "@/lib/offline/mutate";
+import { offlineHandlers, type DeletePayload, type RecipeInsertPayload, type RecipeUpdatePayload } from "@/lib/offline/handlers";
+import { generateLocalId } from "@/lib/offline/id";
 
 export type RecipeIngredient = {
   id: string;
@@ -96,25 +99,24 @@ export function useRecipes() {
     ingredients: IngredientInput[]
   ) {
     if (!familyId || !profile) return { error: "You're not in a family yet.", recipe: null as Recipe | null };
-    const { data, error } = await supabase
-      .from("recipes")
-      .insert({ family_id: familyId, name, details, categories, created_by: profile.id })
-      .select()
-      .single();
-    if (error || !data) return { error: error?.message ?? "Couldn't create recipe.", recipe: null };
-
-    const rows = ingredients
+    const id = generateLocalId();
+    const cleanIngredients = ingredients
       .filter((i) => i.name.trim())
-      .map((i, index) => ({
-        recipe_id: data.id,
-        quantity: i.quantity.trim() || null,
-        name: i.name.trim(),
-        sort_order: index,
-      }));
-    if (rows.length > 0) await supabase.from("recipe_ingredients").insert(rows);
+      .map((i, index) => ({ quantity: i.quantity.trim() || null, name: i.name.trim(), sortOrder: index }));
+    const optimisticRecipe: Recipe = {
+      id,
+      name,
+      details,
+      categories,
+      created_by: profile.id,
+      created_at: new Date().toISOString(),
+      ingredients: cleanIngredients.map((i) => ({ id: generateLocalId(), quantity: i.quantity, name: i.name, sort_order: i.sortOrder })),
+    };
+    setRecipes((prev) => [...prev, optimisticRecipe]);
 
-    await refetch();
-    return { error: null, recipe: { ...data, ingredients: [] } as Recipe };
+    const payload: RecipeInsertPayload = { id, familyId, createdBy: profile.id, row: { name, details, categories }, ingredients: cleanIngredients };
+    await withOfflineQueue("recipes:add", payload, () => offlineHandlers["recipes:add"](payload));
+    return { error: null, recipe: optimisticRecipe };
   }
 
   async function updateRecipe(
@@ -124,24 +126,25 @@ export function useRecipes() {
     categories: RecipeCategory[],
     ingredients: IngredientInput[]
   ) {
-    await supabase.from("recipes").update({ name, details, categories }).eq("id", id);
-    await supabase.from("recipe_ingredients").delete().eq("recipe_id", id);
-    const rows = ingredients
+    const cleanIngredients = ingredients
       .filter((i) => i.name.trim())
-      .map((i, index) => ({
-        recipe_id: id,
-        quantity: i.quantity.trim() || null,
-        name: i.name.trim(),
-        sort_order: index,
-      }));
-    if (rows.length > 0) await supabase.from("recipe_ingredients").insert(rows);
-    await refetch();
+      .map((i, index) => ({ quantity: i.quantity.trim() || null, name: i.name.trim(), sortOrder: index }));
+    const optimisticIngredients: RecipeIngredient[] = cleanIngredients.map((i) => ({
+      id: generateLocalId(),
+      quantity: i.quantity,
+      name: i.name,
+      sort_order: i.sortOrder,
+    }));
+    setRecipes((prev) => prev.map((r) => (r.id === id ? { ...r, name, details, categories, ingredients: optimisticIngredients } : r)));
+
+    const payload: RecipeUpdatePayload = { id, row: { name, details, categories }, ingredients: cleanIngredients };
+    await withOfflineQueue("recipes:update", payload, () => offlineHandlers["recipes:update"](payload));
   }
 
   async function deleteRecipe(id: string) {
     setRecipes((prev) => prev.filter((r) => r.id !== id));
-    const { error } = await supabase.from("recipes").delete().eq("id", id);
-    if (error) refetch();
+    const payload: DeletePayload = { id };
+    await withOfflineQueue("recipes:delete", payload, () => offlineHandlers["recipes:delete"](payload));
   }
 
   return { recipes, isLoading, addRecipe, updateRecipe, deleteRecipe, refetch };

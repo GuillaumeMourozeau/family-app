@@ -25,6 +25,15 @@ export type EventInsertPayload = InsertPayload & { participantIds: string[]; app
 export type EventUpdatePayload = UpdatePayload & { participantIds: string[]; appliesToWholeFamily: boolean };
 export type EventDeletePayload = DeletePayload;
 
+type RecipeIngredientPayload = { quantity: string | null; name: string; sortOrder: number };
+export type RecipeInsertPayload = InsertPayload & { ingredients: RecipeIngredientPayload[] };
+export type RecipeUpdatePayload = UpdatePayload & { ingredients: RecipeIngredientPayload[] };
+
+export type MessagePostPayload = { profileId: string; familyId: string; content: string; updatedAt: string };
+export type MessageDeletePayload = { profileId: string };
+
+export type PushTokenRegisterPayload = { profileId: string; token: string };
+
 // Deliberately loosely typed (`any` payload) — this is a heterogeneous
 // dispatch table keyed by mutation kind, and TS function-parameter variance
 // makes a precisely-typed version fight every entry. Each hook calls its
@@ -136,6 +145,51 @@ export const offlineHandlers: Record<string, (payload: any) => Promise<void>> = 
   },
   "groceryItems:archiveForMeal": async (payload: { mealEntryId: string }) => {
     throwIfError(await supabase.from("grocery_items").update({ is_archived: true }).eq("source_meal_entry_id", payload.mealEntryId));
+  },
+
+  "recipes:add": async (payload: RecipeInsertPayload) => {
+    throwIfError(
+      await supabase.from("recipes").insert({ id: payload.id, family_id: payload.familyId, created_by: payload.createdBy, ...payload.row })
+    );
+    if (payload.ingredients.length > 0) {
+      throwIfError(
+        await supabase.from("recipe_ingredients").insert(
+          payload.ingredients.map((i) => ({ recipe_id: payload.id, quantity: i.quantity, name: i.name, sort_order: i.sortOrder }))
+        )
+      );
+    }
+  },
+  "recipes:update": async (payload: RecipeUpdatePayload) => {
+    throwIfError(await supabase.from("recipes").update(payload.row).eq("id", payload.id));
+    throwIfError(await supabase.from("recipe_ingredients").delete().eq("recipe_id", payload.id));
+    if (payload.ingredients.length > 0) {
+      throwIfError(
+        await supabase.from("recipe_ingredients").insert(
+          payload.ingredients.map((i) => ({ recipe_id: payload.id, quantity: i.quantity, name: i.name, sort_order: i.sortOrder }))
+        )
+      );
+    }
+  },
+  // recipe_ingredients cascades on recipe delete — no separate cleanup needed.
+  "recipes:delete": async (payload: DeletePayload) => {
+    throwIfError(await supabase.from("recipes").delete().eq("id", payload.id));
+  },
+
+  "messages:post": async (payload: MessagePostPayload) => {
+    throwIfError(
+      await supabase
+        .from("messages")
+        .upsert({ profile_id: payload.profileId, family_id: payload.familyId, content: payload.content, updated_at: payload.updatedAt })
+    );
+  },
+  "messages:delete": async (payload: MessageDeletePayload) => {
+    throwIfError(await supabase.from("messages").delete().eq("profile_id", payload.profileId));
+  },
+
+  "pushTokens:register": async (payload: PushTokenRegisterPayload) => {
+    throwIfError(
+      await supabase.from("push_tokens").upsert({ profile_id: payload.profileId, token: payload.token }, { onConflict: "token" })
+    );
   },
 
   "mealPlan:add": async (payload: InsertPayload) => {
