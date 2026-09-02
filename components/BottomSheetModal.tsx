@@ -41,7 +41,7 @@ export function BottomSheetModal({ visible, onClose, children, contentStyle, foo
           fights the scroll gesture for the responder, which made scrolling
           inside the sheet feel sticky/unsmooth.
         */}
-        <Pressable style={[StyleSheet.absoluteFill, styles.backdrop]} onPress={onClose} />
+        <Pressable testID="bottomSheetBackdrop" style={[StyleSheet.absoluteFill, styles.backdrop]} onPress={onClose} />
         <View style={[styles.content, contentStyle]}>
           <ScrollView
             style={styles.scroll}
